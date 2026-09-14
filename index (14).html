@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Race to 1.01</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0C1712;
+    --panel:#132019;
+    --panel-2:#182821;
+    --line:#28382F;
+    --ink:#ECEFE8;
+    --muted:#8C9A8F;
+    --muted-2:#5F6E64;
+    --gold:#E8B54D;
+    --gold-dim:#6B5A2E;
+    --orange:#FF6A3D;
+    --good:#6FCF6E;
+    --bad:#E5695A;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;}
+  ::selection{background:var(--gold);color:#111;}
+  .wrap{max-width:920px;margin:0 auto;padding:28px 20px 80px;}
+
+  /* header */
+  header{display:flex;flex-direction:column;gap:18px;margin-bottom:22px;}
+  .brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
+  .brand h1{
+    font-family:'Oswald',sans-serif;font-weight:700;font-size:34px;letter-spacing:0.5px;
+    margin:0;color:var(--ink);
+  }
+  .brand h1 span{color:var(--gold);}
+  .brand .tag{color:var(--muted);font-size:13.5px;}
+
+  .controlbar{
+    display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+    background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:12px 14px;
+  }
+  .field{display:flex;flex-direction:column;gap:4px;}
+  .field label{font-size:11px;color:var(--muted-2);}
+  .field input, .field select{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+    padding:7px 9px;border-radius:2px;font-family:'Inter',sans-serif;font-size:13.5px;min-width:0;
+  }
+  .field input:focus, .field select:focus{outline:1px solid var(--gold);outline-offset:0;}
+  button{
+    font-family:'Inter',sans-serif;font-weight:600;font-size:13.5px;
+    background:var(--gold);color:#1a1406;border:none;border-radius:2px;
+    padding:9px 16px;cursor:pointer;
+  }
+  button:hover{background:#f0c469;}
+  button:disabled{background:var(--line);color:var(--muted-2);cursor:default;}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted);}
+  button.ghost:hover{border-color:var(--gold);color:var(--gold);background:transparent;}
+  .spacer{flex:1;}
+
+  .status{font-size:12.5px;color:var(--muted-2);min-height:16px;}
+  .status.err{color:var(--bad);}
+  .live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--orange);margin-right:6px;
+    box-shadow:0 0 0 0 rgba(255,106,61,.6);animation:pulse 1.6s infinite;}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(255,106,61,.55);}
+    70%{box-shadow:0 0 0 7px rgba(255,106,61,0);}
+    100%{box-shadow:0 0 0 0 rgba(255,106,61,0);}
+  }
+
+  /* league tabs */
+  .tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:6px;}
+  .tab{
+    white-space:nowrap;padding:8px 14px;font-size:13px;color:var(--muted);
+    border:1px solid var(--line);border-bottom:none;border-radius:2px 2px 0 0;cursor:pointer;background:var(--panel);
+  }
+  .tab.active{color:var(--ink);background:var(--panel-2);border-color:var(--gold-dim);position:relative;}
+  .tab.active::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--gold);}
+
+  .weekbar{
+    display:flex;align-items:center;gap:12px;background:var(--panel-2);border:1px solid var(--line);
+    padding:10px 14px;margin-bottom:18px;flex-wrap:wrap;
+  }
+  .weekbar .meta{font-size:12.5px;color:var(--muted);}
+  .weekbar .meta b{color:var(--ink);font-weight:600;}
+
+  /* matchup group */
+  .matchup{border:1px solid var(--line);margin-bottom:14px;background:var(--panel);}
+  .matchup-head{
+    display:flex;justify-content:space-between;padding:6px 14px;background:var(--panel-2);
+    font-size:11px;color:var(--muted-2);
+  }
+  .team-row{
+    display:grid;grid-template-columns:1fr auto auto auto auto;gap:14px;align-items:center;
+    padding:14px;border-top:1px solid var(--line);cursor:pointer;
+  }
+  .team-row:first-of-type{border-top:none;}
+  .team-row:hover{background:var(--panel-2);}
+  .team-id{display:flex;flex-direction:column;gap:2px;min-width:0;}
+  .team-name{font-weight:600;font-size:14.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .team-owner{font-size:11.5px;color:var(--muted-2);}
+  .num-col{text-align:right;min-width:56px;}
+  .num-col .n{
+    font-family:'Oswald',sans-serif;font-size:22px;font-weight:600;color:var(--ink);
+    font-variant-numeric:tabular-nums;line-height:1;
+  }
+  .num-col .lbl{font-size:10px;color:var(--muted-2);margin-top:3px;}
+  .num-col.gold .n{color:var(--gold);}
+  .effwrap{width:84px;}
+  .effbar{height:5px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:6px;}
+  .effbar i{display:block;height:100%;background:var(--gold);}
+  .eff-pct{font-family:'Oswald',sans-serif;font-size:15px;color:var(--ink);text-align:right;}
+
+  /* lineup detail */
+  .detail{display:none;border-top:1px dashed var(--line);padding:6px 14px 14px;}
+  .detail.open{display:block;}
+  .detail table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px;}
+  .detail th{text-align:left;color:var(--muted-2);font-weight:500;font-size:10.5px;padding:4px 6px;border-bottom:1px solid var(--line);}
+  .detail td{padding:5px 6px;border-bottom:1px solid var(--line);color:var(--ink);}
+  .detail tr.swap td{background:rgba(232,181,77,0.08);}
+  .pos-badge{
+    display:inline-block;font-size:10px;color:var(--muted);border:1px solid var(--line);
+    padding:1px 5px;border-radius:2px;margin-right:6px;font-family:'Oswald',sans-serif;letter-spacing:0.3px;
+  }
+  .pts{font-family:'Oswald',sans-serif;font-variant-numeric:tabular-nums;}
+  .tagbench{color:var(--gold);font-size:10.5px;}
+  .tagstart{color:var(--muted-2);font-size:10.5px;}
+
+  /* league picker */
+  .picker{border:1px solid var(--line);background:var(--panel);padding:6px 4px;}
+  .picker-row{
+    display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid var(--line);
+  }
+  .picker-row:first-child{border-top:none;}
+  .picker-row input[type=checkbox]{width:17px;height:17px;accent-color:var(--gold);cursor:pointer;flex-shrink:0;}
+  .picker-row label{flex:1;cursor:pointer;}
+  .picker-row .pname{font-weight:600;font-size:14.5px;color:var(--ink);}
+  .picker-row .pmeta{font-size:11.5px;color:var(--muted-2);margin-top:1px;}
+  .picker-actions{display:flex;gap:10px;padding:14px 16px;align-items:center;border-top:1px solid var(--line);}
+
+  /* standings */
+  .standings{border:1px solid var(--gold-dim);background:var(--panel);margin-bottom:22px;}
+  .standings-head{
+    display:flex;justify-content:space-between;align-items:baseline;padding:10px 14px;
+    background:var(--panel-2);border-bottom:1px solid var(--gold-dim);
+  }
+  .standings-head h3{
+    font-family:'Oswald',sans-serif;font-weight:500;font-size:14px;margin:0;color:var(--gold);letter-spacing:0.2px;
+  }
+  .standings-head .sub{font-size:11px;color:var(--muted-2);}
+  .stand-row{
+    display:grid;grid-template-columns:26px 1fr auto auto auto auto;gap:12px;align-items:center;
+    padding:10px 14px;border-top:1px solid var(--line);cursor:pointer;
+  }
+  .stand-row:hover{background:var(--panel-2);}
+  .playoff-badge{font-size:9.5px;font-weight:600;color:var(--muted);border:1px solid var(--line);
+    border-radius:2px;padding:1px 5px;margin-left:6px;vertical-align:middle;letter-spacing:0.2px;}
+  .zone-label{
+    font-family:'Oswald',sans-serif;font-size:10.5px;font-weight:600;letter-spacing:0.6px;
+    text-transform:uppercase;padding:8px 14px 6px;color:var(--gold);border-top:3px solid var(--gold);
+    background:var(--panel-2);
+  }
+  .zone-label-playoff{color:var(--muted);border-top:3px solid var(--line);}
+  .spoiler-badge{font-size:10.5px;font-weight:600;margin-left:4px;white-space:nowrap;}
+  .stand-row:first-of-type{border-top:none;}
+  .stand-rank{font-family:'Oswald',sans-serif;color:var(--muted-2);font-size:13px;}
+  .stand-id{display:flex;flex-direction:column;gap:2px;min-width:0;}
+  .stand-name{font-size:13.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;}
+  .stand-record{font-size:11px;color:var(--muted-2);font-variant-numeric:tabular-nums;}
+  .stand-num{text-align:right;min-width:54px;}
+  .stand-num .n{font-family:'Oswald',sans-serif;font-variant-numeric:tabular-nums;font-size:16px;color:var(--ink);}
+  .stand-num .n.gold{color:var(--gold);}
+  .stand-num .lbl{font-size:9.5px;color:var(--muted-2);}
+  .cand-row{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-top:1px dashed var(--line);}
+  .cand-row:first-child{border-top:none;}
+  .cand-name{font-size:13px;color:var(--ink);}
+  .cand-pts{font-family:'Oswald',sans-serif;font-size:13px;color:var(--gold);}
+  .cand-pts .lbl{font-family:'Inter',sans-serif;font-size:10px;color:var(--muted-2);margin-left:4px;}
+  .cand-sub{font-size:11px;color:var(--muted-2);margin:-2px 0 4px;}
+  .cand-empty{font-size:12.5px;color:var(--muted);padding:4px 0;}
+
+  .empty{padding:60px 20px;text-align:center;color:var(--muted);}
+  .empty h2{font-family:'Oswald',sans-serif;color:var(--ink);font-weight:500;font-size:20px;margin:0 0 8px;}
+
+  footer{margin-top:30px;color:var(--muted-2);font-size:11.5px;line-height:1.6;}
+  a{color:var(--gold);}
+
+  @media (max-width:600px){
+    .team-row{grid-template-columns:1fr auto auto;row-gap:8px;}
+    .effwrap{display:none;}
+    .brand h1{font-size:26px;}
+    .stand-row{grid-template-columns:22px 1fr auto auto;}
+    .stand-hide-mobile{display:none;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>The Race to <span>1.01</span></h1>
+      <div class="tag">Optimal-lineup (Max PF) tracker for your Sleeper leagues</div>
+    </div>
+    <div class="controlbar">
+      <div class="field">
+        <label for="username">Sleeper username</label>
+        <input id="username" type="text" value="" placeholder="your Sleeper username">
+      </div>
+      <div class="field">
+        <label for="season">Season</label>
+        <input id="season" type="text" value="2026" style="width:70px;">
+      </div>
+      <button id="loadBtn">Load leagues</button>
+      <div class="spacer"></div>
+      <div class="field">
+        <label for="autoRefresh">&nbsp;</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);cursor:pointer;">
+          <input type="checkbox" id="autoRefresh" style="width:auto;"> auto-refresh (30s)
+        </label>
+      </div>
+      <button class="ghost" id="refreshBtn" disabled>Refresh now</button>
+      <button class="ghost" id="changeLeaguesBtn" style="display:none;">Change leagues</button>
+      <button class="ghost" id="settingsDrawerToggle" style="display:none;">⚙ League settings</button>
+    </div>
+    <div id="status" class="status"></div>
+    <div id="envWarning" style="display:none;background:#3A1F14;border:1px solid #7A4326;color:#F2C9A8;font-size:12.5px;padding:10px 12px;line-height:1.5;"></div>
+    <div id="settingsDrawerPanel" class="picker" style="display:none;margin-top:10px;padding:16px;">
+      <div style="font-family:'Oswald',sans-serif;font-weight:500;font-size:14px;color:var(--gold);margin-bottom:2px;">League settings &amp; filters</div>
+
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
+        <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:6px;">Untouchable players</div>
+        <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px;line-height:1.5;">
+          KeepTradeCut doesn't offer a public feed a browser page can pull live, so bluechip filtering runs on live dynasty values from FantasyCalc (top 12 at each position). Paste names here — copied straight off KeepTradeCut's rankings — to guarantee specific players are never suggested, one name per line.
+        </div>
+        <textarea id="untouchablesInput" rows="4" style="width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;border-radius:2px;" placeholder="Ja'Marr Chase&#10;Bijan Robinson&#10;CeeDee Lamb"></textarea>
+        <div style="display:flex;gap:10px;margin-top:10px;">
+          <button id="untouchablesSave">Save list</button>
+          <button class="ghost" id="untouchablesClear">Clear</button>
+        </div>
+      </div>
+
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
+        <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:6px;">Playoff rules</div>
+        <div style="font-size:11.5px;color:var(--muted);margin-bottom:12px;line-height:1.5;">
+          Every league sets up its playoff field a bit differently. Set how many seeds come from the primary method below, then optionally send any leftover seeds to a points-for wildcard instead.
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:12px;">
+          <div class="field">
+            <label for="cfgPlayoffTeams">Playoff teams (total)</label>
+            <input id="cfgPlayoffTeams" type="number" min="0" style="width:70px;">
+          </div>
+          <div class="field">
+            <label for="cfgPrimaryMethod">Primary method</label>
+            <select id="cfgPrimaryMethod">
+              <option value="best_record">Best record</option>
+              <option value="division_winners">Division winners</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="cfgTiebreak">Tiebreaker (for ties in wins)</label>
+            <select id="cfgTiebreak">
+              <option value="points">Points for</option>
+              <option value="h2h">Head-to-head</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="cfgPrimarySeeds">Seeds from primary method</label>
+            <input id="cfgPrimarySeeds" type="number" min="0" style="width:70px;">
+          </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);cursor:pointer;margin-bottom:12px;">
+          <input type="checkbox" id="cfgWildcardByPoints" style="width:auto;"> Fill remaining seeds with the highest points-for teams left over
+        </label>
+        <div style="font-size:10.5px;color:var(--muted-2);margin-bottom:12px;line-height:1.5;">
+          Examples: 6 seeds, all by best record → primary method "Best record," seeds from primary = 6, wildcard off. 4 division winners plus 2 points-for wildcards → primary method "Division winners" (seed count fills automatically), wildcard on. 4 best records plus 2 points-for wildcards → "Best record," seeds from primary = 4, wildcard on.
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button id="playoffSettingsSave">Save</button>
+          <button class="ghost" id="playoffSettingsReset">Reset to league default</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="tabs" class="tabs"></div>
+  <div id="weekbar" class="weekbar" style="display:none;"></div>
+  <div id="content"></div>
+
+  <footer>
+    Data from the public <a href="https://docs.sleeper.com/" target="_blank" rel="noopener">Sleeper API</a>, fetched live in your browser — nothing is sent to a server. Dynasty trade values from <a href="https://fantasycalc.com" target="_blank" rel="noopener">FantasyCalc</a>.
+    <b>Max PF</b> is the highest score a roster could have posted a given week, found by optimally assigning every rostered player — bench, IR, and taxi squad included, matching how Sleeper itself factors them in — to a starting slot given the league's scoring and lineup slots.
+    The standings show every team in one full draft pick order. Teams outside a playoff spot are ordered by <b>total season Max PF, lowest to highest</b> and get the earliest picks — built for leagues that award the 1st overall rookie pick to the team with the lowest potential points. Teams currently holding a playoff spot (marked with a small "Playoff" tag) pick after them, ordered by standings instead, worst seed to best. How the playoff field itself is determined is fully configurable per league under "Playoff settings," since every league sets this up differently: pick a primary method (best record, or division winners), how many seeds it fills, a tiebreaker for ties in wins (points for, or head-to-head), and optionally send any leftover seeds to a pure points-for wildcard. It defaults to that league's own Sleeper settings (best record, points-for tiebreak, no wildcard). A record with an asterisk (e.g. 3-1*) includes a projected result for the week in progress, based on live head-to-head scoring — Sleeper itself only finalizes wins/losses once a week is fully over, so this fills the gap in real time rather than waiting. Trade/drop suggestions exclude anyone in the top 12 dynasty assets at their position (or on your own pasted untouchable list) and are ranked by how much your Max PF would actually drop if you moved them — the gap between that player and the next-best option at their position on your roster.
+  </footer>
+</div>
+
+<script>
+const BASE = 'https://api.sleeper.app/v1';
+let playersMap = {};
+let allLeagues = [];
+let leaguesData = [];
+let currentLeagueIdx = -1;
+let currentWeek = 1;
+const LEAGUE_FINAL_WEEK = 14; // this league's fantasy season ends at week 14 — no later weeks are shown
+let nflState = null;
+let autoTimer = null;
+let openDetailRosterId = null;
+let openStandingsRosterId = null;
+let currentUsername = '';
+let currentSeason = '';
+
+const $ = (id) => document.getElementById(id);
+const statusEl = $('status');
+
+/* Plain browser localStorage, wrapped to match the {value} shape the rest of the code expects. */
+const localStore = {
+  async get(key){
+    try{
+      const v = localStorage.getItem(key);
+      return v === null ? null : { value: v };
+    }catch(e){ return null; }
+  },
+  async set(key, value){
+    try{ localStorage.setItem(key, value); return { value }; }
+    catch(e){ console.warn('localStorage set failed', key, e); return null; }
+  }
+};
+
+function setStatus(msg, isErr){
+  statusEl.textContent = msg || '';
+  statusEl.className = 'status' + (isErr ? ' err' : '');
+}
+
+async function fetchJSON(url){
+  let res;
+  try{
+    res = await fetch(url);
+  }catch(networkErr){
+    showEnvWarning();
+    throw new Error('Network request was blocked before it reached Sleeper (see note above).');
+  }
+  if(!res.ok) throw new Error(`Sleeper API error ${res.status} for ${url.replace(BASE,'')}`);
+  const text = await res.text();
+  if(!text) return null;
+  return JSON.parse(text);
+}
+
+function showEnvWarning(){
+  const el = $('envWarning');
+  if(el.dataset.shown) return;
+  el.dataset.shown = '1';
+  el.style.display = 'block';
+  const isFile = location.protocol === 'file:';
+  el.innerHTML = isFile
+    ? `Your browser blocked the request to api.sleeper.app before it went out. If you're viewing this inside an in-app preview pane, that pane sandboxes network access. Save this file to your computer and open it directly in a normal browser tab instead.`
+    : `The request to api.sleeper.app was blocked before it left the page — most likely because this is running inside a sandboxed preview (Claude's in-app file viewer, an embedded iframe, etc.) rather than a normal browser tab. Download this HTML file and open it directly in your browser (double-click it, or File → Open) to fix this.`;
+}
+
+/* ---------- position / slot eligibility ---------- */
+function slotEligiblePositions(codeRaw){
+  const code = (codeRaw||'').toUpperCase();
+  const table = {
+    QB:['QB'], RB:['RB'], WR:['WR'], TE:['TE'], K:['K'], DEF:['DEF'],
+    FLEX:['RB','WR','TE'],
+    SUPER_FLEX:['QB','RB','WR','TE'], SUPERFLEX:['QB','RB','WR','TE'],
+    WRRB_FLEX:['WR','RB'], RB_WR:['RB','WR'],
+    WRTE_FLEX:['WR','TE'], REC_FLEX:['WR','TE'], WR_TE:['WR','TE'],
+    RBTE_FLEX:['RB','TE'], RB_TE:['RB','TE'],
+    IDP_FLEX:['DL','LB','DB'],
+    DL:['DL'], LB:['LB'], DB:['DB'], CB:['CB','DB'], S:['S','DB'],
+    DE:['DE','DL'], DT:['DT','DL'], EDGE:['DE','LB','EDGE']
+  };
+  if(table[code]) return table[code];
+  if(code.includes('SUPER') && code.includes('FLEX')) return ['QB','RB','WR','TE'];
+  if(code.includes('FLEX')){
+    const known = ['QB','RB','WR','TE','DL','LB','DB','CB','S','DE','DT'];
+    const found = known.filter(p => code.includes(p));
+    if(found.length) return found;
+    return ['RB','WR','TE'];
+  }
+  return [code];
+}
+
+const NON_STARTING = new Set(['BN','IR','TAXI']);
+
+/* ---------- players cache ---------- */
+async function ensurePlayersLoaded(neededIds){
+  const idsToFind = new Set(neededIds);
+  for(const id of idsToFind){ if(playersMap[id]) idsToFind.delete(id); }
+  if(idsToFind.size === 0) return;
+
+  let cachedGood = false;
+  try{
+    const cached = await localStore.get('sleeper_players_cache');
+    if(cached && cached.value){
+      const data = JSON.parse(cached.value);
+      const fresh = (Date.now() - data.ts) < 24*3600*1000;
+      let coversAll = true;
+      for(const id of idsToFind){ if(!data.players[id]){ coversAll = false; break; } }
+      if(fresh && coversAll){
+        Object.assign(playersMap, data.players);
+        cachedGood = true;
+      } else if(coversAll){
+        Object.assign(playersMap, data.players);
+        cachedGood = true;
+      }
+    }
+  }catch(e){ /* no cache yet */ }
+
+  if(cachedGood) return;
+
+  setStatus('Fetching NFL player database (one-time, ~5MB)…');
+  const all = await fetchJSON(`${BASE}/players/nfl`);
+  const filtered = {};
+  for(const id of neededIds){
+    const p = all[id];
+    if(p){
+      const name = (p.first_name || p.last_name) ? `${p.first_name||''} ${p.last_name||''}`.trim() : id;
+      filtered[id] = { name, pos: (p.fantasy_positions && p.fantasy_positions[0]) || p.position || 'DEF', team: p.team || id, age: p.age };
+    } else {
+      filtered[id] = { name: id, pos: 'DEF', team: id };
+    }
+  }
+  Object.assign(playersMap, filtered);
+  try{
+    await localStore.set('sleeper_players_cache', JSON.stringify({ts: Date.now(), players: filtered}));
+  }catch(e){ /* best effort */ }
+}
+
+/* ---------- Max PF optimal assignment (subset-DP over slots) ---------- */
+function computeMaxPF(rosterPlayerIds, playerPoints, playerPos, slots){
+  const S = slots.length;
+  const FULL = (1<<S) - 1;
+  const NEG = -1e9;
+  let old = new Float64Array(1<<S).fill(NEG);
+  old[0] = 0;
+  const history = [old];
+  const eligCache = [];
+
+  for(const pid of rosterPlayerIds){
+    const pts = playerPoints[pid] || 0;
+    const pos = playerPos[pid];
+    const eligSlots = [];
+    for(let s=0; s<S; s++){ if(slots[s].positions.includes(pos)) eligSlots.push(s); }
+    eligCache.push(eligSlots);
+    const cur = history[history.length-1];
+    const next = cur.slice();
+    for(let mask=0; mask<=FULL; mask++){
+      if(cur[mask] === NEG) continue;
+      for(const s of eligSlots){
+        const bit = 1<<s;
+        if(mask & bit) continue;
+        const nm = mask | bit;
+        const val = cur[mask] + pts;
+        if(val > next[nm]) next[nm] = val;
+      }
+    }
+    history.push(next);
+  }
+
+  const finalDp = history[history.length-1];
+  let bestMask = 0, bestVal = 0;
+  if(finalDp[FULL] > NEG){
+    bestVal = finalDp[FULL]; bestMask = FULL;
+  } else {
+    let bestBits = -1;
+    for(let mask=0; mask<=FULL; mask++){
+      if(finalDp[mask] > NEG){
+        let bits=0, m=mask; while(m){ bits += m&1; m>>=1; }
+        if(bits > bestBits || (bits === bestBits && finalDp[mask] > bestVal)){
+          bestBits = bits; bestVal = finalDp[mask]; bestMask = mask;
+        }
+      }
+    }
+  }
+
+  const assignment = new Array(S).fill(null);
+  let mask = bestMask;
+  for(let i = rosterPlayerIds.length - 1; i >= 0; i--){
+    const pid = rosterPlayerIds[i];
+    const prev = history[i];
+    const cur = history[i+1];
+    if(Math.abs(cur[mask] - prev[mask]) < 1e-6){ continue; }
+    const pts = playerPoints[pid] || 0;
+    for(const s of eligCache[i]){
+      const bit = 1<<s;
+      if(!(mask & bit)) continue;
+      if(Math.abs(prev[mask ^ bit] + pts - cur[mask]) < 1e-6){
+        assignment[s] = pid;
+        mask ^= bit;
+        break;
+      }
+    }
+  }
+  return { maxPF: Math.max(0,bestVal), assignment };
+}
+
+/* Net Max PF Impact (ΔPF): for each player actually in the optimal lineup, re-run the solver
+   with that one player removed. The drop in Max PF is their true opportunity-cost contribution —
+   this accounts for FLEX/SUPER_FLEX cascades, unlike a simple same-position gap. Players not in
+   the optimal lineup contribute 0 by definition and are skipped for performance. */
+function computePlayerImpacts(t){
+  const impacts = {};
+  const starters = (t.assignment || []).filter(Boolean);
+  starters.forEach(pid => {
+    const subIds = t.players.filter(id => id !== pid);
+    const { maxPF: subMaxPF } = computeMaxPF(subIds, t.playerPoints, t.playerPos, t.startingSlots);
+    impacts[pid] = Math.max(0, t.maxPF - subMaxPF);
+  });
+  return impacts;
+}
+
+function spoilerBadge(delta){
+  if(delta >= 10) return { emoji: '🔴', label: 'Spoiler Alert', color: 'var(--bad)' };
+  if(delta >= 5) return { emoji: '🟠', label: 'High Impact', color: 'var(--orange)' };
+  if(delta > 0) return { emoji: '⚪', label: 'Low Impact', color: 'var(--muted)' };
+  return { emoji: '⬛', label: 'Zero Impact', color: 'var(--muted-2)' };
+}
+
+/* ---------- data loading ---------- */
+async function loadLeagues(){
+  const username = $('username').value.trim();
+  const season = $('season').value.trim();
+  if(!username || !season){ setStatus('Enter a username and season.', true); return; }
+
+  $('loadBtn').disabled = true;
+  setStatus('Looking up user…');
+  try{
+    const user = await fetchJSON(`${BASE}/user/${encodeURIComponent(username)}`);
+    if(!user || !user.user_id){ throw new Error(`No Sleeper user found for "${username}".`); }
+
+    setStatus('Fetching leagues…');
+    nflState = await fetchJSON(`${BASE}/state/nfl`);
+    const leagues = await fetchJSON(`${BASE}/user/${user.user_id}/leagues/nfl/${season}`);
+    currentUsername = username;
+    currentSeason = season;
+    allLeagues = leagues || [];
+
+    if(allLeagues.length === 0){
+      leaguesData = [];
+      $('tabs').innerHTML = '';
+      $('weekbar').style.display = 'none';
+      $('changeLeaguesBtn').style.display = 'none';
+      $('refreshBtn').disabled = true;
+      $('content').innerHTML = `<div class="empty"><h2>No leagues found</h2>No ${season} NFL leagues turned up for "${username}". Check the username and season.</div>`;
+      setStatus('');
+      return;
+    }
+
+    currentWeek = Math.min(LEAGUE_FINAL_WEEK, (nflState && (nflState.display_week || nflState.week)) || 1);
+
+    const storageKey = selectionStorageKey(username, season);
+    let savedIds = null;
+    try{
+      const cached = await localStore.get(storageKey);
+      if(cached && cached.value) savedIds = JSON.parse(cached.value);
+    }catch(e){ /* nothing saved yet */ }
+
+    const validSaved = (savedIds || []).filter(id => allLeagues.some(l => l.league_id === id));
+    if(validSaved.length > 0){
+      await startMonitoring(validSaved);
+    } else {
+      renderLeaguePicker();
+    }
+    setStatus('');
+  }catch(err){
+    console.error(err);
+    setStatus(err.message || 'Something went wrong.', true);
+  }finally{
+    $('loadBtn').disabled = false;
+  }
+}
+
+function selectionStorageKey(username, season){
+  return `sleeper_selected_leagues:${username.toLowerCase()}:${season}`;
+}
+
+function renderLeaguePicker(preChecked){
+  const checked = new Set(preChecked || allLeagues.map(l => l.league_id));
+  $('tabs').innerHTML = '';
+  $('weekbar').style.display = 'none';
+  $('changeLeaguesBtn').style.display = 'none';
+  $('refreshBtn').disabled = true;
+  if(autoTimer){ clearInterval(autoTimer); autoTimer = null; $('autoRefresh').checked = false; }
+
+  const rows = allLeagues.map(l => `
+    <div class="picker-row">
+      <input type="checkbox" id="pk-${l.league_id}" value="${l.league_id}" ${checked.has(l.league_id) ? 'checked' : ''}>
+      <label for="pk-${l.league_id}">
+        <div class="pname">${l.name || 'Unnamed league'}</div>
+        <div class="pmeta">${l.total_rosters} teams · ${l.status}</div>
+      </label>
+    </div>`).join('');
+
+  $('content').innerHTML = `
+    <div class="picker">
+      ${rows}
+      <div class="picker-actions">
+        <button id="monitorBtn">Monitor selected leagues</button>
+        <button class="ghost" id="selectAllBtn">Select all</button>
+      </div>
+    </div>`;
+
+  $('selectAllBtn').onclick = () => {
+    $('content').querySelectorAll('.picker-row input[type=checkbox]').forEach(cb => cb.checked = true);
+  };
+  $('monitorBtn').onclick = async () => {
+    const ids = [...$('content').querySelectorAll('.picker-row input[type=checkbox]:checked')].map(cb => cb.value);
+    if(ids.length === 0){ setStatus('Select at least one league.', true); return; }
+    await startMonitoring(ids);
+  };
+}
+
+async function startMonitoring(selectedIds){
+  const idSet = new Set(selectedIds);
+  leaguesData = allLeagues
+    .filter(l => idSet.has(l.league_id))
+    .map(l => ({ league: l, rosters: null, users: null, matchups: null }));
+  currentLeagueIdx = 0;
+  openDetailRosterId = null;
+
+  try{
+    await localStore.set(selectionStorageKey(currentUsername, currentSeason), JSON.stringify(selectedIds));
+  }catch(e){ /* best effort */ }
+
+  $('changeLeaguesBtn').style.display = '';
+  $('settingsDrawerToggle').style.display = '';
+  renderTabs();
+  renderWeekBar();
+  await loadCurrentLeagueWeek();
+  $('refreshBtn').disabled = false;
+}
+
+async function loadCurrentLeagueWeek(){
+  if(currentLeagueIdx < 0) return;
+  const entry = leaguesData[currentLeagueIdx];
+  const leagueId = entry.league.league_id;
+  setStatus('Loading rosters, scores, and season history…');
+  try{
+    const [rosters, users] = await Promise.all([
+      fetchJSON(`${BASE}/league/${leagueId}/rosters`),
+      fetchJSON(`${BASE}/league/${leagueId}/users`)
+    ]);
+    entry.rosters = rosters || [];
+    entry.users = users || [];
+
+    await loadPlayoffConfig(entry);
+    await loadSeasonData(entry, currentWeek);
+    entry.seasonStandings = computeSeasonStandings(entry, currentWeek);
+
+    setStatus('Checking dynasty trade values…');
+    entry.tradeValues = await ensureTradeValues(entry);
+
+    renderContent();
+    setStatus('');
+  }catch(err){
+    console.error(err);
+    setStatus(err.message || 'Failed to load league data.', true);
+  }
+}
+
+/* ---------- rendering ---------- */
+function renderTabs(){
+  const tabs = $('tabs');
+  tabs.innerHTML = '';
+  leaguesData.forEach((entry, i) => {
+    const t = document.createElement('div');
+    t.className = 'tab' + (i === currentLeagueIdx ? ' active' : '');
+    t.textContent = entry.league.name || `League ${i+1}`;
+    t.onclick = async () => {
+      if(i === currentLeagueIdx) return;
+      currentLeagueIdx = i;
+      openDetailRosterId = null;
+      $('settingsDrawerPanel').style.display = 'none';
+      renderTabs();
+      await loadCurrentLeagueWeek();
+    };
+    tabs.appendChild(t);
+  });
+}
+
+function renderWeekBar(){
+  const bar = $('weekbar');
+  bar.style.display = 'flex';
+  const seasonType = nflState ? nflState.season_type : 'regular';
+  const realCurrentWeek = (nflState && (nflState.display_week || nflState.week)) || LEAGUE_FINAL_WEEK;
+  const maxSelectableWeek = Math.min(LEAGUE_FINAL_WEEK, realCurrentWeek);
+  bar.innerHTML = `
+    <div class="meta">NFL state: <b>${seasonType} · week ${nflState ? (nflState.display_week||nflState.week) : '?'}</b></div>
+    <div class="field" style="margin-left:auto;">
+      <label for="weekSel">Viewing week</label>
+      <select id="weekSel"></select>
+    </div>
+  `;
+  const sel = $('weekSel');
+  for(let w=1; w<=maxSelectableWeek; w++){
+    const opt = document.createElement('option');
+    opt.value = w; opt.textContent = `Week ${w}`;
+    if(w === currentWeek) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  sel.onchange = async () => {
+    currentWeek = parseInt(sel.value, 10);
+    openDetailRosterId = null;
+    const entry = leaguesData[currentLeagueIdx];
+    if(entry){ entry.paceProjection = null; entry.paceOpen = false; }
+    await loadCurrentLeagueWeek();
+  };
+}
+
+function getStartingSlots(league){
+  return (league.roster_positions || [])
+    .filter(code => !NON_STARTING.has((code||'').toUpperCase()))
+    .map(code => ({ code, positions: slotEligiblePositions(code) }));
+}
+
+function buildTeamCalcs(entry, matchups){
+  const rosterById = {};
+  entry.rosters.forEach(r => rosterById[r.roster_id] = r);
+  const userById = {};
+  entry.users.forEach(u => userById[u.user_id] = u);
+  const startingSlots = getStartingSlots(entry.league);
+
+  return (matchups || []).map(m => {
+    const roster = rosterById[m.roster_id] || {};
+    const owner = userById[roster.owner_id] || {};
+    const teamName = owner.username || owner.display_name || `Roster ${m.roster_id}`;
+
+    // Sleeper's own Max PF factors in IR and taxi squad players too, even though they
+    // can't actually be started — match that rather than excluding them.
+    const eligibleIds = m.players || [];
+
+    const playerPoints = m.players_points || {};
+    const playerPos = {};
+    (m.players || []).forEach(pid => { playerPos[pid] = (playersMap[pid] && playersMap[pid].pos) || 'DEF'; });
+
+    const actualStarters = (m.starters || []).filter(pid => pid && pid !== '0');
+    const actualPts = actualStarters.reduce((s,pid) => s + (playerPoints[pid] || 0), 0);
+
+    const { maxPF, assignment } = computeMaxPF(eligibleIds, playerPoints, playerPos, startingSlots);
+    const efficiency = maxPF > 0 ? Math.min(100, (actualPts / maxPF) * 100) : 100;
+
+    return { rosterId: m.roster_id, matchupId: m.matchup_id, teamName, ownerName: (owner.metadata && owner.metadata.team_name) || '',
+      actualPts, maxPF, efficiency, assignment, startingSlots, actualStarters, playerPoints, playerPos,
+      players: m.players || [] };
+  });
+}
+
+/* ---------- trade-value lookup (FantasyCalc, dynasty) for bluechip filtering ---------- */
+let tradeValueCache = {};
+function inferLeagueFormat(entry){
+  const startingSlots = getStartingSlots(entry.league);
+  const numQbs = startingSlots.some(s => s.code.toUpperCase().includes('SUPER')) ? 2 : 1;
+  const numTeams = entry.league.total_rosters || 12;
+  const rec = (entry.league.scoring_settings && entry.league.scoring_settings.rec) || 0;
+  const ppr = rec >= 0.9 ? 1 : (rec >= 0.4 ? 0.5 : 0);
+  return { numQbs, numTeams, ppr };
+}
+async function ensureTradeValues(entry){
+  const { numQbs, numTeams, ppr } = inferLeagueFormat(entry);
+  const key = `${numQbs}-${numTeams}-${ppr}`;
+  if(tradeValueCache[key]) return tradeValueCache[key];
+  try{
+    const url = `https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=${numQbs}&numTeams=${numTeams}&ppr=${ppr}`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('bad response');
+    const data = await res.json();
+    const bySleeperId = {};
+    data.forEach(entryVal => {
+      const p = entryVal.player || {};
+      if(p.sleeperId) bySleeperId[p.sleeperId] = { value: entryVal.value, overallRank: entryVal.overallRank, positionRank: entryVal.positionRank, age: p.maybeAge };
+    });
+    tradeValueCache[key] = { bySleeperId, failed: false };
+  }catch(e){
+    tradeValueCache[key] = { bySleeperId: {}, failed: true };
+  }
+  return tradeValueCache[key];
+}
+
+/* Manual "untouchable" override — paste names copied from a rankings page (e.g. KeepTradeCut's
+   dynasty rankings, which has no public/CORS-enabled API we can pull live from the browser) so
+   the person can pin exactly who should never be suggested, regardless of what the live feed says. */
+let manualBluechipNames = new Set();
+let manualBluechipDisplayNames = [];
+function normalizeName(n){ return (n||'').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+async function loadManualBluechips(){
+  try{
+    const cached = await localStore.get('sleeper_manual_bluechips');
+    if(cached && cached.value){
+      const names = JSON.parse(cached.value);
+      manualBluechipDisplayNames = names;
+      manualBluechipNames = new Set(names.map(normalizeName));
+      return names;
+    }
+  }catch(e){ /* none saved */ }
+  return [];
+}
+async function saveManualBluechips(names){
+  manualBluechipDisplayNames = names;
+  manualBluechipNames = new Set(names.map(normalizeName));
+  try{ await localStore.set('sleeper_manual_bluechips', JSON.stringify(names)); }catch(e){ /* best effort */ }
+}
+
+const BLUECHIP_POS_RANK_CUTOFF = 12;
+function isBluechip(pid, tradeValues, playerMeta){
+  const meta = playerMeta || {};
+  if(manualBluechipNames.size && meta.name && manualBluechipNames.has(normalizeName(meta.name))){
+    return true;
+  }
+  if(tradeValues && !tradeValues.failed){
+    const v = tradeValues.bySleeperId[pid];
+    if(v && v.positionRank) return v.positionRank <= BLUECHIP_POS_RANK_CUTOFF;
+    return false;
+  }
+  // fallback heuristic when trade-value data is unavailable: treat young, low-experience
+  // players (still on their rookie-scale ceiling) as bluechip/untouchable
+  const age = meta.age;
+  if(typeof age === 'number' && age <= 24) return true;
+  return false;
+}
+
+/* ---------- season aggregation across all weeks played so far ---------- */
+async function loadSeasonData(entry, uptoWeek){
+  entry.weeklyMatchups = entry.weeklyMatchups || {};
+  entry.weeklyCalcs = entry.weeklyCalcs || {};
+
+  const weeksToRebuild = [];
+  for(let w = 1; w <= uptoWeek; w++){
+    const isFinalWeek = w < uptoWeek; // earlier weeks are done; only the current week can still change
+    const haveMatchups = isFinalWeek && entry.weeklyMatchups[w];
+    if(!haveMatchups){
+      const data = await fetchJSON(`${BASE}/league/${entry.league.league_id}/matchups/${w}`);
+      entry.weeklyMatchups[w] = data || [];
+      weeksToRebuild.push(w);
+    } else if(!entry.weeklyCalcs[w]){
+      weeksToRebuild.push(w); // matchups already cached but calcs were never built (e.g. first load)
+    }
+  }
+
+  const neededIds = new Set();
+  weeksToRebuild.forEach(w => {
+    (entry.weeklyMatchups[w] || []).forEach(m => {
+      (m.players||[]).forEach(id => neededIds.add(id));
+      (m.starters||[]).forEach(id => { if(id && id !== '0') neededIds.add(id); });
+    });
+  });
+  await ensurePlayersLoaded([...neededIds]);
+
+  weeksToRebuild.forEach(w => {
+    const calcs = buildTeamCalcs(entry, entry.weeklyMatchups[w]);
+    calcs.forEach(c => { c.impacts = computePlayerImpacts(c); });
+    entry.weeklyCalcs[w] = calcs;
+  });
+}
+
+function playoffConfigStorageKey(leagueId){ return `sleeper_playoff_settings:${leagueId}`; }
+
+async function loadPlayoffConfig(entry){
+  const key = playoffConfigStorageKey(entry.league.league_id);
+  let saved = null;
+  try{
+    const cached = await localStore.get(key);
+    if(cached && cached.value) saved = JSON.parse(cached.value);
+  }catch(e){ /* none saved */ }
+  const leagueDefault = (entry.league.settings && entry.league.settings.playoff_teams) || null;
+  const playoffTeams = (saved && saved.playoffTeams) || leagueDefault;
+  entry.playoffConfig = {
+    playoffTeams,
+    primaryMethod: (saved && saved.primaryMethod) || 'best_record',
+    tiebreak: (saved && saved.tiebreak) || 'points',
+    primarySeeds: (saved && saved.primarySeeds != null) ? saved.primarySeeds : playoffTeams,
+    wildcardByPoints: saved ? !!saved.wildcardByPoints : false
+  };
+}
+
+async function savePlayoffConfig(entry, cfg){
+  entry.playoffConfig = cfg;
+  try{ await localStore.set(playoffConfigStorageKey(entry.league.league_id), JSON.stringify(cfg)); }
+  catch(e){ /* best effort */ }
+}
+
+/* Sleeper only finalizes settings.wins/losses/ties once a week is fully over, so during an
+   active week every roster's official record still reflects last week. For any week beyond
+   that official count, project the result from live head-to-head actual points instead. */
+function computeProjectedRecords(entry, uptoWeek){
+  const records = {};
+  entry.rosters.forEach(r => {
+    const s = r.settings || {};
+    records[r.roster_id] = { wins: s.wins || 0, losses: s.losses || 0, ties: s.ties || 0, projected: false };
+  });
+  const officialWeeks = entry.rosters.length
+    ? Math.max(0, ...entry.rosters.map(r => { const s = r.settings || {}; return (s.wins||0) + (s.losses||0) + (s.ties||0); }))
+    : 0;
+
+  for(let w = officialWeeks + 1; w <= uptoWeek; w++){
+    const calcs = entry.weeklyCalcs[w] || [];
+    const byMatchup = {};
+    calcs.forEach(c => { (byMatchup[c.matchupId] = byMatchup[c.matchupId] || []).push(c); });
+    Object.values(byMatchup).forEach(pair => {
+      if(pair.length !== 2) return; // skip byes / non-standard matchup groupings
+      const [a, b] = pair;
+      if(!records[a.rosterId] || !records[b.rosterId]) return;
+      if(a.actualPts > b.actualPts){ records[a.rosterId].wins++; records[b.rosterId].losses++; }
+      else if(b.actualPts > a.actualPts){ records[b.rosterId].wins++; records[a.rosterId].losses++; }
+      else { records[a.rosterId].ties++; records[b.rosterId].ties++; }
+      records[a.rosterId].projected = true;
+      records[b.rosterId].projected = true;
+    });
+  }
+  return records;
+}
+
+/* Pairwise head-to-head this season: positive means rosterA has won more meetings than rosterB. */
+function headToHeadDelta(entry, uptoWeek, rosterIdA, rosterIdB){
+  let aWins = 0, bWins = 0;
+  for(let w = 1; w <= uptoWeek; w++){
+    const calcs = entry.weeklyCalcs[w] || [];
+    const ca = calcs.find(c => c.rosterId === rosterIdA);
+    const cb = calcs.find(c => c.rosterId === rosterIdB);
+    if(ca && cb && ca.matchupId === cb.matchupId){
+      if(ca.actualPts > cb.actualPts) aWins++;
+      else if(cb.actualPts > ca.actualPts) bWins++;
+    }
+  }
+  return aWins - bWins;
+}
+
+function compareRosters(a, b, records, tiebreak, entry, uptoWeek){
+  const ra = records[a.roster_id] || {}, rb = records[b.roster_id] || {};
+  if((rb.wins||0) !== (ra.wins||0)) return (rb.wins||0) - (ra.wins||0);
+  if(tiebreak === 'h2h'){
+    const delta = headToHeadDelta(entry, uptoWeek, a.roster_id, b.roster_id);
+    if(delta !== 0) return -delta;
+  }
+  return (b.__fpts||0) - (a.__fpts||0);
+}
+
+function leagueHasDivisions(entry){
+  return entry.rosters.some(r => r.settings && r.settings.division);
+}
+
+/* Two-stage qualification: a primary method (best record, or division winners) fills some
+   number of seeds; any seats left over can optionally go to a pure points-for wildcard —
+   covering "all by record," "record + points wildcards," and "division winners + wildcards"
+   without hardcoding any one league's specific format. */
+function computePlayoffPositions(entry, records, uptoWeek){
+  const cfg = entry.playoffConfig || {};
+  const playoffTeams = cfg.playoffTeams || (entry.league.settings && entry.league.settings.playoff_teams);
+  if(!playoffTeams) return { available: false, inPlayoffSet: new Set(), orderedRosterIds: [] };
+
+  const tiebreak = cfg.tiebreak || 'points';
+  const primaryMethod = cfg.primaryMethod || 'best_record';
+  const cmp = (a,b) => compareRosters(a, b, records, tiebreak, entry, uptoWeek);
+
+  let stage1;
+  if(primaryMethod === 'division_winners' && leagueHasDivisions(entry)){
+    const divisions = {};
+    entry.rosters.forEach(r => {
+      const d = (r.settings && r.settings.division) || 1;
+      (divisions[d] = divisions[d] || []).push(r);
+    });
+    let winners = Object.values(divisions).map(group => group.slice().sort(cmp)[0]).sort(cmp);
+    if(cfg.primarySeeds != null && cfg.primarySeeds < winners.length){
+      winners = winners.slice(0, Math.max(0, cfg.primarySeeds));
+    }
+    stage1 = winners;
+  } else {
+    const primarySeeds = (cfg.primarySeeds != null) ? cfg.primarySeeds : playoffTeams;
+    stage1 = entry.rosters.slice().sort(cmp).slice(0, Math.max(0, primarySeeds));
+  }
+
+  const stage1Ids = new Set(stage1.map(r => r.roster_id));
+  const remainingSlots = Math.max(0, playoffTeams - stage1.length);
+  let stage2 = [];
+  if(remainingSlots > 0){
+    const remainingPool = entry.rosters.filter(r => !stage1Ids.has(r.roster_id));
+    stage2 = cfg.wildcardByPoints
+      ? remainingPool.slice().sort((a,b) => (b.__fpts||0) - (a.__fpts||0)).slice(0, remainingSlots)
+      : remainingPool.slice().sort(cmp).slice(0, remainingSlots);
+  }
+
+  const orderedRosterIds = [...stage1, ...stage2].map(r => r.roster_id);
+  return { available: true, playoffTeams, inPlayoffSet: new Set(orderedRosterIds), orderedRosterIds };
+}
+
+function computeSeasonStandings(entry, uptoWeek){
+  const totals = {};
+  for(let w = 1; w <= uptoWeek; w++){
+    const calcs = entry.weeklyCalcs[w] || [];
+    calcs.forEach(c => {
+      const t = totals[c.rosterId] = totals[c.rosterId] || {
+        rosterId: c.rosterId, teamName: c.teamName, ownerName: c.ownerName,
+        totalMaxPF: 0, totalActual: 0, weeklyMaxPF: 0, weeklyActual: 0, playerPoints: {}, playerImpact: {}
+      };
+      t.teamName = c.teamName; t.ownerName = c.ownerName;
+      t.totalMaxPF += c.maxPF;
+      t.totalActual += c.actualPts;
+      if(w === uptoWeek){ t.weeklyMaxPF = c.maxPF; t.weeklyActual = c.actualPts; }
+      Object.entries(c.playerPoints).forEach(([pid, pts]) => {
+        t.playerPoints[pid] = (t.playerPoints[pid] || 0) + (pts || 0);
+      });
+      Object.entries(c.impacts || {}).forEach(([pid, delta]) => {
+        t.playerImpact[pid] = (t.playerImpact[pid] || 0) + (delta || 0);
+      });
+    });
+  }
+  const records = computeProjectedRecords(entry, uptoWeek);
+  // total season actual points already reflects live scoring for the in-progress week too,
+  // so it doubles as an always-current tiebreaker alongside the projected record.
+  entry.rosters.forEach(r => { r.__fpts = totals[r.roster_id] ? totals[r.roster_id].totalActual : 0; });
+  const playoffInfo = computePlayoffPositions(entry, records, uptoWeek);
+  entry.rosters.forEach(r => {
+    if(totals[r.roster_id]){
+      const rec = records[r.roster_id] || {};
+      totals[r.roster_id].wins = rec.wins || 0;
+      totals[r.roster_id].losses = rec.losses || 0;
+      totals[r.roster_id].ties = rec.ties || 0;
+      totals[r.roster_id].recordProjected = !!rec.projected;
+      totals[r.roster_id].currentPlayers = r.players || [];
+      totals[r.roster_id].inPlayoffPosition = playoffInfo.inPlayoffSet.has(r.roster_id);
+    }
+  });
+  const all = Object.values(totals);
+  const nonPlayoff = all.filter(t => !playoffInfo.available || !t.inPlayoffPosition).sort((a,b) => a.totalMaxPF - b.totalMaxPF);
+  const playoff = playoffInfo.available
+    ? playoffInfo.orderedRosterIds.slice().reverse().map(rid => totals[rid]).filter(Boolean)
+    : [];
+
+  const minMaxPF = all.length ? Math.min(...all.map(t => t.totalMaxPF)) : 0;
+  all.forEach(t => { t.diffFromLeader = t.totalMaxPF - minMaxPF; });
+
+  const arr = [...nonPlayoff, ...playoff];
+  arr.forEach((t, i) => { t.pickNumber = i + 1; });
+  arr.playoffInfoAvailable = playoffInfo.available;
+  arr.playoffTeams = playoffInfo.playoffTeams;
+  return arr;
+}
+
+/* Season-cumulative Net Max PF Impact: for each currently-rostered player, sum their weekly
+   ΔPF (see computePlayerImpacts) across every week counted so far. This is the real, solver-
+   verified cost of keeping them — including FLEX/SUPER_FLEX cascades — not just a same-position
+   comparison. */
+function buildDropCandidates(teamTotals, tradeValues){
+  const candidates = (teamTotals.currentPlayers || [])
+    .map(pid => ({ pid, pts: teamTotals.playerPoints[pid] || 0, impact: teamTotals.playerImpact[pid] || 0, meta: playersMap[pid] || {} }))
+    .filter(c => c.impact > 10 && !isBluechip(c.pid, tradeValues, c.meta))
+    .sort((a,b) => b.impact - a.impact)
+    .slice(0, 3);
+  return candidates;
+}
+
+function renderContent(){
+  const entry = leaguesData[currentLeagueIdx];
+  const content = $('content');
+  const weekCalcs = entry && entry.weeklyCalcs ? entry.weeklyCalcs[currentWeek] : null;
+  if(!entry || !weekCalcs || weekCalcs.length === 0){
+    content.innerHTML = `<div class="empty"><h2>No matchup data yet</h2>Week ${currentWeek} hasn't generated scores for this league yet.</div>`;
+    return;
+  }
+
+  const teamCalcs = weekCalcs.slice();
+  const byMatchup = {};
+  teamCalcs.forEach(t => { (byMatchup[t.matchupId] = byMatchup[t.matchupId] || []).push(t); });
+
+  const standingsHtml = renderStandings(entry);
+
+  teamCalcs.sort((a,b) => b.actualPts - a.actualPts);
+
+  let html = standingsHtml;
+  const seenMatchups = new Set();
+  teamCalcs.forEach(t => {
+    if(seenMatchups.has(t.matchupId)) return;
+    seenMatchups.add(t.matchupId);
+    const pair = byMatchup[t.matchupId];
+    html += `<div class="matchup"><div class="matchup-head"><span>Matchup ${t.matchupId ?? '—'}</span><span>Week ${currentWeek}</span></div>`;
+    pair.forEach(team => { html += renderTeamRow(team); });
+    html += `</div>`;
+  });
+
+  content.innerHTML = html;
+
+  content.querySelectorAll('.team-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const rid = row.getAttribute('data-roster');
+      openDetailRosterId = (openDetailRosterId === rid) ? null : rid;
+      renderContent();
+    });
+  });
+
+  content.querySelectorAll('.stand-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const rid = row.getAttribute('data-roster');
+      openStandingsRosterId = (openStandingsRosterId === rid) ? null : rid;
+      renderContent();
+    });
+  });
+
+  const paceBtn = content.querySelector('#paceToggleBtn');
+  if(paceBtn){
+    paceBtn.addEventListener('click', async () => {
+      entry.paceOpen = !entry.paceOpen;
+      if(entry.paceOpen && !entry.paceProjection){
+        entry.paceLoading = true;
+        renderContent();
+        entry.paceProjection = await computePaceProjection(entry);
+        entry.paceLoading = false;
+      }
+      renderContent();
+    });
+  }
+}
+
+function renderStandings(entry){
+  const ranked = entry.seasonStandings || [];
+  const tradeValues = entry.tradeValues;
+  const playoffInfoAvailable = ranked.playoffInfoAvailable;
+
+  const renderRow = (t) => {
+    const isOpen = openStandingsRosterId === String(t.rosterId);
+    const record = `${t.wins}-${t.losses}${t.ties ? `-${t.ties}` : ''}${t.recordProjected ? '*' : ''}`;
+    const isPlayoff = playoffInfoAvailable && t.inPlayoffPosition;
+    const isTopPick = t.pickNumber === 1;
+    const isMaxPFLeader = t.diffFromLeader === 0;
+
+    let detailHtml = '';
+    if(isOpen){
+      const candidates = buildDropCandidates(t, tradeValues);
+      const cliffs = topPositionalCliffs(t, 3);
+      const sourceNote = (!tradeValues || tradeValues.failed)
+        ? `Dynasty trade-value lookup was unavailable, so bluechip filtering fell back to a rough age-based guess — treat it as a starting point, not gospel.`
+        : `Filtered against current dynasty trade values — anyone inside the top ${BLUECHIP_POS_RANK_CUTOFF} at their position is excluded as a bluechip.${manualBluechipNames.size ? ' Your pasted untouchable list is also applied.' : ''}`;
+      const impactNote = (c) => {
+        const badge = spoilerBadge(c.impact / Math.max(1, currentWeek));
+        return `<span style="color:${badge.color};">${badge.emoji} ${c.impact.toFixed(1)} Max PF this season</span> from being in the optimal lineup — the true cost of keeping them, re-solved week by week`;
+      };
+      const candRows = candidates.length
+        ? candidates.map(c => `
+            <div class="cand-row">
+              <div class="cand-name">${c.meta.name || c.pid} <span class="pos-badge">${c.meta.pos || '—'}</span></div>
+              <div class="cand-pts">${c.pts.toFixed(1)} <span class="lbl">season pts</span></div>
+            </div>
+            <div class="cand-sub">${impactNote(c)}</div>`).join('')
+        : `<div class="cand-empty">No clear sell-high candidates — this roster isn't carrying obvious dead weight.</div>`;
+
+      const cliffRows = cliffs.length
+        ? cliffs.map(c => `
+            <div class="cand-row">
+              <div class="cand-name">${c.meta.name || c.pid} <span class="pos-badge">${c.meta.pos || '—'}</span></div>
+              <div class="cand-pts">${c.pts.toFixed(1)} <span class="lbl">season pts</span></div>
+            </div>
+            <div class="cand-sub">${impactNote(c)}</div>`).join('')
+        : `<div class="cand-empty">Not enough data yet.</div>`;
+
+      detailHtml = `<div class="detail open">
+        <div style="font-size:11px;color:var(--gold);margin-bottom:6px;">Trade / drop candidates — scoring too well for the tank</div>
+        ${candRows}
+        <div style="font-size:10.5px;color:var(--muted-2);margin:8px 0 16px;">${sourceNote} Impact is each player's summed Net Max PF Impact (ΔPF) across the season — how much lower this roster's Max PF would have been each week without them, re-optimized from scratch.</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;border-top:1px solid var(--line);padding-top:12px;">Hardest to replace on this roster (any player, for context)</div>
+        ${cliffRows}
+      </div>`;
+    }
+
+    const lastCol = `<div class="stand-num"><div class="n" style="${isMaxPFLeader ? 'color:var(--good);' : ''}">${isMaxPFLeader ? '—' : '+' + t.diffFromLeader.toFixed(1)}</div><div class="lbl">behind 1st (max pf)</div></div>`;
+
+    return `<div class="stand-row" data-roster="${t.rosterId}">
+      <div class="stand-rank" style="${isTopPick ? 'color:var(--gold);' : ''}">${t.pickNumber}</div>
+      <div class="stand-id">
+        <div class="stand-name">${t.teamName}${isPlayoff ? ' <span class="playoff-badge">Playoff</span>' : ''}</div>
+        <div class="stand-record">${record}</div>
+      </div>
+      <div class="stand-num"><div class="n">${t.totalActual.toFixed(1)}</div><div class="lbl">season pts</div></div>
+      <div class="stand-num"><div class="n gold">${t.totalMaxPF.toFixed(1)}</div><div class="lbl">season max pf</div></div>
+      <div class="stand-num stand-hide-mobile"><div class="n">${t.weeklyMaxPF.toFixed(1)}</div><div class="lbl">wk ${currentWeek} max pf</div></div>
+      ${lastCol}
+    </div>${detailHtml}`;
+  };
+
+  const nonPlayoffCount = ranked.length - (playoffInfoAvailable ? ranked.filter(t => t.inPlayoffPosition).length : 0);
+  const hasBothZones = playoffInfoAvailable && nonPlayoffCount > 0 && nonPlayoffCount < ranked.length;
+
+  const rowHtmls = ranked.map(renderRow);
+  if(hasBothZones){
+    const pickLabel = n => `1.${String(n).padStart(2,'0')}`;
+    rowHtmls.unshift(`<div class="zone-label">${pickLabel(1)}–${pickLabel(nonPlayoffCount)} · Tank Zone</div>`);
+    rowHtmls.splice(nonPlayoffCount + 1, 0,
+      `<div class="zone-label zone-label-playoff">${pickLabel(nonPlayoffCount+1)}–${pickLabel(ranked.length)} · Playoff Zone</div>`);
+  }
+  const rows = rowHtmls.join('');
+
+  const playoffNote = playoffInfoAvailable
+    ? `Picks 1–${nonPlayoffCount} go to the teams outside a playoff spot, ordered by season Max PF (lowest first). Picks ${nonPlayoffCount+1}–${ranked.length} go to the ${ranked.playoffTeams} teams currently holding a playoff spot, ordered by standings (record, points as tiebreak) — worst playoff seed picks first, best record picks last.`
+    : `This league's playoff-teams setting wasn't found, so every team is ordered by season Max PF alone.`;
+
+  const weeksLeft = LEAGUE_FINAL_WEEK - currentWeek;
+  const paceBtn = weeksLeft > 0
+    ? `<button class="ghost" id="paceToggleBtn" style="font-size:12px;padding:6px 12px;margin-top:10px;">${entry.paceOpen ? 'Hide' : 'Project'} pace to 1.01</button>`
+    : '';
+
+  return `<div class="standings">
+    <div class="standings-head">
+      <h3>Race to 1.01 — draft pick order by season Max PF</h3>
+      <span class="sub">through week ${currentWeek} · updates live · tap a team for trade/drop ideas</span>
+    </div>
+    ${rows}
+  </div>
+  <div style="font-size:10.5px;color:var(--muted-2);margin-top:8px;">${playoffNote}</div>
+  ${paceBtn}
+  ${renderPacePanel(entry)}`;
+}
+
+/* ---------- Pace to 1.01 (rest-of-season projection) ---------- */
+function projectedPointsFromRaw(raw, scoringSettings){
+  const statBag = raw.stats || raw;
+  let total = 0, matchedAnyCategory = false;
+  Object.entries(scoringSettings || {}).forEach(([key, weight]) => {
+    if(typeof statBag[key] === 'number'){ total += statBag[key] * weight; matchedAnyCategory = true; }
+  });
+  if(matchedAnyCategory) return total;
+  // fallback to Sleeper's own precomputed standard fields if raw stat categories aren't present
+  const rec = (scoringSettings && scoringSettings.rec) || 0;
+  if(rec >= 0.9 && typeof raw.pts_ppr === 'number') return raw.pts_ppr;
+  if(rec >= 0.4 && typeof raw.pts_half_ppr === 'number') return raw.pts_half_ppr;
+  if(typeof raw.pts_std === 'number') return raw.pts_std;
+  return null;
+}
+
+async function fetchWeekProjectionPoints(season, week, scoringSettings){
+  let data;
+  try{
+    data = await fetchJSON(`https://api.sleeper.app/projections/nfl/${season}/${week}?season_type=regular`);
+  }catch(e){ return null; }
+  if(!data) return null;
+  const entries = Array.isArray(data) ? data : Object.entries(data).map(([pid, val]) => ({ player_id: pid, ...val }));
+  const points = {};
+  let totalMagnitude = 0;
+  entries.forEach(e => {
+    const pid = e.player_id || e.playerId;
+    if(!pid) return;
+    const pts = projectedPointsFromRaw(e, scoringSettings);
+    if(pts != null){ points[pid] = pts; totalMagnitude += Math.abs(pts); }
+  });
+  // Sleeper's projections endpoint is undocumented and its shape isn't guaranteed — if parsing
+  // produced nothing but zeros, treat this week as unusable rather than showing a false 0.0 pace.
+  if(totalMagnitude === 0) return null;
+  return points;
+}
+
+async function computePaceProjection(entry){
+  const remaining = [];
+  for(let w = currentWeek + 1; w <= LEAGUE_FINAL_WEEK; w++) remaining.push(w);
+  if(remaining.length === 0) return { available: false, reason: 'season-over' };
+
+  const startingSlots = getStartingSlots(entry.league);
+  const scoringSettings = entry.league.scoring_settings || {};
+
+  const neededIds = new Set();
+  entry.rosters.forEach(r => (r.players || []).forEach(id => neededIds.add(id)));
+  await ensurePlayersLoaded([...neededIds]);
+
+  const rosProjectedMaxPF = {};
+  entry.rosters.forEach(r => { rosProjectedMaxPF[r.roster_id] = 0; });
+
+  let anyWeekUsable = false;
+  for(const w of remaining){
+    const projPoints = await fetchWeekProjectionPoints(currentSeason, w, scoringSettings);
+    if(!projPoints) continue;
+    anyWeekUsable = true;
+    entry.rosters.forEach(r => {
+      const ids = r.players || [];
+      const playerPos = {};
+      ids.forEach(pid => { playerPos[pid] = (playersMap[pid] && playersMap[pid].pos) || 'DEF'; });
+      const { maxPF } = computeMaxPF(ids, projPoints, playerPos, startingSlots);
+      rosProjectedMaxPF[r.roster_id] += maxPF;
+    });
+  }
+  if(!anyWeekUsable) return { available: false, reason: 'no-projection-data' };
+
+  const standings = entry.seasonStandings || [];
+  const pool = standings.filter(t => !standings.playoffInfoAvailable || !t.inPlayoffPosition);
+  const results = pool.map(t => ({
+    rosterId: t.rosterId, teamName: t.teamName,
+    currentMaxPF: t.totalMaxPF,
+    projectedROS: rosProjectedMaxPF[t.rosterId] || 0,
+    projectedFinal: t.totalMaxPF + (rosProjectedMaxPF[t.rosterId] || 0)
+  })).sort((a,b) => a.projectedFinal - b.projectedFinal);
+
+  const leader = results[0];
+  const weeksRemaining = remaining.length;
+  results.forEach(r => { r.magicNumber = (r === leader) ? null : (r.projectedFinal - leader.projectedFinal) / weeksRemaining; });
+
+  return { available: true, results, weeksRemaining };
+}
+
+function renderPacePanel(entry){
+  if(!entry.paceOpen) return '';
+  if(entry.paceLoading){
+    return `<div class="standings" style="margin-top:14px;">
+      <div class="standings-head"><h3>Pace to 1.01</h3></div>
+      <div style="padding:16px;font-size:12.5px;color:var(--muted);">Running rest-of-season projections through the optimal lineup solver — this fetches one projection set per remaining week, so it can take a moment…</div>
+    </div>`;
+  }
+  const proj = entry.paceProjection;
+  if(!proj || !proj.available){
+    const reason = (proj && proj.reason === 'season-over')
+      ? 'The season is over — nothing left to project.'
+      : `Sleeper's rest-of-season projection data wasn't usable right now. This relies on an undocumented, unofficial endpoint that isn't guaranteed to stay stable — try again later, or treat the current Max PF standings as the best available signal in the meantime.`;
+    return `<div class="standings" style="margin-top:14px;">
+      <div class="standings-head"><h3>Pace to 1.01</h3></div>
+      <div style="padding:16px;font-size:12.5px;color:var(--muted);">${reason}</div>
+    </div>`;
+  }
+  const rows = proj.results.map((r,i) => `
+    <div class="stand-row" style="cursor:default;">
+      <div class="stand-rank" style="${i===0?'color:var(--gold);':''}">${i+1}</div>
+      <div class="stand-id"><div class="stand-name">${r.teamName}</div></div>
+      <div class="stand-num"><div class="n">${r.currentMaxPF.toFixed(1)}</div><div class="lbl">so far</div></div>
+      <div class="stand-num"><div class="n">${r.projectedROS.toFixed(1)}</div><div class="lbl">proj. rest</div></div>
+      <div class="stand-num"><div class="n gold">${r.projectedFinal.toFixed(1)}</div><div class="lbl">proj. final</div></div>
+      <div class="stand-num"><div class="n">${r.magicNumber==null ? '—' : '+' + r.magicNumber.toFixed(1) + '/wk'}</div><div class="lbl">to catch 1st</div></div>
+    </div>`).join('');
+  return `<div class="standings" style="margin-top:14px;">
+    <div class="standings-head">
+      <h3>Pace to 1.01</h3>
+      <span class="sub">${proj.weeksRemaining} weeks left · projected via Sleeper's rest-of-season player projections, run through the same optimal-lineup solver</span>
+    </div>
+    ${rows}
+  </div>
+  <div style="font-size:10.5px;color:var(--muted-2);margin-top:8px;">"To catch 1st" is the average Max PF per week a team would need to shed below its current pace to close the projected gap with the leader by week ${LEAGUE_FINAL_WEEK}. Assumes each roster's current players stay on it the rest of the way — trades and waiver moves aren't projected.</div>`;
+}
+
+function topPositionalCliffs(teamTotals, n){
+  return (teamTotals.currentPlayers || [])
+    .map(pid => ({ pid, pts: teamTotals.playerPoints[pid] || 0, impact: teamTotals.playerImpact[pid] || 0, meta: playersMap[pid] || {} }))
+    .filter(c => c.pts > 0)
+    .sort((a,b) => b.impact - a.impact)
+    .slice(0, n || 3);
+}
+
+function renderTeamRow(t){
+  const effPct = t.maxPF > 0 ? (t.actualPts / t.maxPF * 100) : 100;
+  const barWidth = Math.max(2, Math.min(100, effPct));
+  const isOpen = openDetailRosterId === String(t.rosterId);
+
+  let detailHtml = '';
+  if(isOpen){
+    const impacts = computePlayerImpacts(t);
+    const rows = [];
+    t.startingSlots.forEach((slot, i) => {
+      const optPid = t.assignment[i];
+      const optPts = optPid ? (t.playerPoints[optPid] || 0) : 0;
+      const optName = optPid ? (playersMap[optPid]?.name || optPid) : '—';
+      const wasStarting = optPid && t.actualStarters.includes(optPid);
+      const delta = optPid ? (impacts[optPid] || 0) : 0;
+      const badge = optPid ? spoilerBadge(delta) : null;
+      const badgeHtml = badge
+        ? ` <span class="spoiler-badge" style="color:${badge.color};" title="${badge.label}: removing this player would drop Max PF by ${delta.toFixed(1)}">${badge.emoji} ${delta > 0 ? '+' + delta.toFixed(1) : '0.0'}</span>`
+        : '';
+      rows.push(`<tr class="${wasStarting ? '' : 'swap'}">
+        <td><span class="pos-badge">${slot.code}</span></td>
+        <td>${optName}${!wasStarting ? ' <span class="tagbench">(from bench)</span>' : ''}${badgeHtml}</td>
+        <td style="text-align:right;" class="pts">${optPts.toFixed(2)}</td>
+      </tr>`);
+    });
+    const actualRows = t.actualStarters.map(pid => {
+      const p = playersMap[pid] || {};
+      return `<tr><td><span class="pos-badge">${p.pos||'—'}</span></td><td>${p.name||pid}</td><td style="text-align:right;" class="pts">${(t.playerPoints[pid]||0).toFixed(2)}</td></tr>`;
+    }).join('');
+
+    detailHtml = `<div class="detail open">
+      <div style="display:flex;gap:24px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:220px;">
+          <div style="font-size:11px;color:var(--muted-2);margin-bottom:2px;">Actual lineup started</div>
+          <table><thead><tr><th>Pos</th><th>Player</th><th style="text-align:right;">Pts</th></tr></thead><tbody>${actualRows}</tbody></table>
+        </div>
+        <div style="flex:1;min-width:220px;">
+          <div style="font-size:11px;color:var(--gold);margin-bottom:2px;">Optimal (Max PF) lineup</div>
+          <table><thead><tr><th>Slot</th><th>Player</th><th style="text-align:right;">Pts</th></tr></thead><tbody>${rows.join('')}</tbody></table>
+          <div style="font-size:10px;color:var(--muted-2);margin-top:6px;line-height:1.4;">Badge = Net Max PF Impact: how much this week's Max PF would drop if this player weren't on the roster at all. 🔴 ≥10 pts · 🟠 5–10 · ⚪ under 5 · ⬛ not in the optimal lineup.</div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  return `<div class="team-row" data-roster="${t.rosterId}">
+      <div class="team-id">
+        <div class="team-name">${t.teamName}</div>
+        <div class="team-owner">${t.ownerName}</div>
+      </div>
+      <div class="num-col">
+        <div class="n">${t.actualPts.toFixed(2)}</div>
+        <div class="lbl">actual</div>
+      </div>
+      <div class="num-col gold">
+        <div class="n">${t.maxPF.toFixed(2)}</div>
+        <div class="lbl">max pf</div>
+      </div>
+      <div class="effwrap">
+        <div class="eff-pct">${effPct.toFixed(0)}%</div>
+        <div class="effbar"><i style="width:${barWidth}%;"></i></div>
+      </div>
+      <div class="num-col">
+        <div class="n" style="font-size:16px;color:${(t.maxPF-t.actualPts)>0.05?'var(--bad)':'var(--good)'};">${(t.maxPF-t.actualPts).toFixed(1)}</div>
+        <div class="lbl">left on bench</div>
+      </div>
+    </div>${detailHtml}`;
+}
+
+/* ---------- events ---------- */
+$('loadBtn').addEventListener('click', loadLeagues);
+$('refreshBtn').addEventListener('click', loadCurrentLeagueWeek);
+$('changeLeaguesBtn').addEventListener('click', () => {
+  const currentIds = leaguesData.map(e => e.league.league_id);
+  renderLeaguePicker(currentIds);
+});
+$('settingsDrawerToggle').addEventListener('click', () => {
+  const panel = $('settingsDrawerPanel');
+  const opening = panel.style.display === 'none';
+  const entry = leaguesData[currentLeagueIdx];
+  if(opening && !entry){ setStatus('Load a league first.', true); return; }
+  panel.style.display = opening ? 'block' : 'none';
+  if(opening){
+    $('untouchablesInput').value = manualBluechipDisplayNames.join('\n');
+    populatePlayoffSettingsForm(entry);
+  }
+});
+$('untouchablesSave').addEventListener('click', async () => {
+  const names = $('untouchablesInput').value.split('\n').map(s => s.trim()).filter(Boolean);
+  await saveManualBluechips(names);
+  if(currentLeagueIdx >= 0) renderContent();
+});
+$('untouchablesClear').addEventListener('click', async () => {
+  $('untouchablesInput').value = '';
+  await saveManualBluechips([]);
+  if(currentLeagueIdx >= 0) renderContent();
+});
+function populatePlayoffSettingsForm(entry){
+  const cfg = entry.playoffConfig || {};
+  const hasDivisions = leagueHasDivisions(entry);
+  $('cfgPlayoffTeams').value = cfg.playoffTeams || '';
+  const methodSel = $('cfgPrimaryMethod');
+  [...methodSel.options].forEach(opt => {
+    opt.disabled = (opt.value === 'division_winners' && !hasDivisions);
+  });
+  methodSel.value = (cfg.primaryMethod === 'division_winners' && !hasDivisions) ? 'best_record' : (cfg.primaryMethod || 'best_record');
+  $('cfgTiebreak').value = cfg.tiebreak || 'points';
+  const seedsInput = $('cfgPrimarySeeds');
+  if(methodSel.value === 'division_winners'){
+    const divCount = new Set(entry.rosters.map(r => (r.settings && r.settings.division) || 1)).size;
+    seedsInput.value = divCount;
+    seedsInput.disabled = true;
+  } else {
+    seedsInput.value = (cfg.primarySeeds != null) ? cfg.primarySeeds : (cfg.playoffTeams || '');
+    seedsInput.disabled = false;
+  }
+  $('cfgWildcardByPoints').checked = !!cfg.wildcardByPoints;
+}
+
+$('cfgPrimaryMethod').addEventListener('change', () => {
+  const entry = leaguesData[currentLeagueIdx];
+  if(!entry) return;
+  const seedsInput = $('cfgPrimarySeeds');
+  if($('cfgPrimaryMethod').value === 'division_winners'){
+    const divCount = new Set(entry.rosters.map(r => (r.settings && r.settings.division) || 1)).size;
+    seedsInput.value = divCount;
+    seedsInput.disabled = true;
+  } else {
+    seedsInput.disabled = false;
+    if(!seedsInput.value) seedsInput.value = $('cfgPlayoffTeams').value || '';
+  }
+});
+$('playoffSettingsSave').addEventListener('click', async () => {
+  const entry = leaguesData[currentLeagueIdx];
+  if(!entry) return;
+  const cfg = {
+    playoffTeams: parseInt($('cfgPlayoffTeams').value, 10) || null,
+    primaryMethod: $('cfgPrimaryMethod').value,
+    tiebreak: $('cfgTiebreak').value,
+    primarySeeds: $('cfgPrimarySeeds').value === '' ? null : parseInt($('cfgPrimarySeeds').value, 10),
+    wildcardByPoints: $('cfgWildcardByPoints').checked
+  };
+  await savePlayoffConfig(entry, cfg);
+  entry.seasonStandings = computeSeasonStandings(entry, currentWeek);
+  entry.paceProjection = null;
+  renderContent();
+});
+$('playoffSettingsReset').addEventListener('click', async () => {
+  const entry = leaguesData[currentLeagueIdx];
+  if(!entry) return;
+  try{ localStorage.removeItem(playoffConfigStorageKey(entry.league.league_id)); }catch(e){ /* best effort */ }
+  await loadPlayoffConfig(entry);
+  populatePlayoffSettingsForm(entry);
+  entry.seasonStandings = computeSeasonStandings(entry, currentWeek);
+  renderContent();
+});
+$('autoRefresh').addEventListener('change', (e) => {
+  if(e.target.checked){
+    autoTimer = setInterval(loadCurrentLeagueWeek, 30000);
+  } else {
+    clearInterval(autoTimer);
+  }
+});
+$('username').addEventListener('keydown', e => { if(e.key === 'Enter') loadLeagues(); });
+$('season').addEventListener('keydown', e => { if(e.key === 'Enter') loadLeagues(); });
+
+// no default username — wait for the visitor to enter their own and click Load leagues
+loadManualBluechips();
+setStatus('Enter your Sleeper username above to get started.');
+</script>
+</body>
+</html>
