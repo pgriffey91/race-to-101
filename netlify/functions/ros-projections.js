@@ -76,8 +76,10 @@ async function fetchFantasyProsProjections(season) {
     const res = await fetch(FANTASYPROS_URL(season), {
       headers: { 'x-api-key': apiKey }
     });
-    if (!res.ok) {
-      console.error(`FantasyPros fetch failed: ${res.status}`);
+    const fpContentType = res.headers.get('content-type') || '';
+    if (!res.ok || !fpContentType.includes('application/json')) {
+      const preview = (await res.text()).slice(0, 200);
+      console.error(`FantasyPros fetch failed (status ${res.status}): ${preview}`);
       return null;
     }
     const data = await res.json();
@@ -95,8 +97,22 @@ async function fetchFantasyProsProjections(season) {
 async function fetchEspnProjections(season) {
   try {
     const res = await fetch(ESPN_URL(season), {
-      headers: { 'X-Fantasy-Filter': ESPN_FILTER_HEADER }
+      headers: {
+        'X-Fantasy-Filter': ESPN_FILTER_HEADER,
+        // ESPN's servers return an HTML block page instead of JSON for requests that don't
+        // look like a browser -- a plain server-side fetch with no User-Agent gets rejected.
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        'Accept': 'application/json'
+      }
     });
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      // Still not JSON even with a browser UA -- log a short preview instead of letting
+      // JSON.parse throw an opaque "Unexpected token '<'" error.
+      const preview = (await res.text()).slice(0, 200);
+      console.error(`ESPN returned non-JSON (status ${res.status}): ${preview}`);
+      return null;
+    }
     if (!res.ok) {
       console.error(`ESPN fetch failed: ${res.status}`);
       return null;
