@@ -88,7 +88,13 @@ async function fetchFantasyProsProjections(season) {
     const data = await res.json();
     // DEBUG: dump the real shape once so we can fix the field-name guesses below against
     // an actual response instead of documentation fragments.
-    console.log('FantasyPros raw sample:', JSON.stringify(data).slice(0, 500));
+    console.log('FantasyPros top-level keys:', Object.keys(data).join(', '));
+    if (Array.isArray(data.players) && data.players.length) {
+      console.log('FantasyPros first player object (full):', JSON.stringify(data.players[0]));
+      console.log('FantasyPros player object keys:', Object.keys(data.players[0]).join(', '));
+    } else {
+      console.log('FantasyPros: no players array found. Full response (truncated):', JSON.stringify(data).slice(0, 1500));
+    }
 
     // VERIFY: adjust to the real envelope -- this assumes { players: [{ player_name, fpts, ... }] }
     const parsed = (data.players || []).map(p => ({
