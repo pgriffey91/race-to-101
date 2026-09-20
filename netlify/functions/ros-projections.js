@@ -71,23 +71,33 @@ function buildNameIndex(sleeperPlayers) {
 
 async function fetchFantasyProsProjections(season) {
   const apiKey = process.env.FANTASYPROS_API_KEY;
-  if (!apiKey) return null; // gracefully degrade if the key isn't configured
+  if (!apiKey) {
+    console.error('FantasyPros skipped: FANTASYPROS_API_KEY is not set in this deploy\'s environment.');
+    return null;
+  }
   try {
     const res = await fetch(FANTASYPROS_URL(season), {
       headers: { 'x-api-key': apiKey }
     });
     const fpContentType = res.headers.get('content-type') || '';
     if (!res.ok || !fpContentType.includes('application/json')) {
-      const preview = (await res.text()).slice(0, 200);
+      const preview = (await res.text()).slice(0, 300);
       console.error(`FantasyPros fetch failed (status ${res.status}): ${preview}`);
       return null;
     }
     const data = await res.json();
+    // DEBUG: dump the real shape once so we can fix the field-name guesses below against
+    // an actual response instead of documentation fragments.
+    console.log('FantasyPros raw sample:', JSON.stringify(data).slice(0, 500));
+
     // VERIFY: adjust to the real envelope -- this assumes { players: [{ player_name, fpts, ... }] }
-    return (data.players || []).map(p => ({
+    const parsed = (data.players || []).map(p => ({
       rosPts: Number(p.fpts ?? p.proj_pts ?? p.points),
       searchName: normalizeNameForMatch(p.player_name)
     })).filter(p => Number.isFinite(p.rosPts));
+
+    console.log(`FantasyPros: ${(data.players || []).length} raw entries, ${parsed.length} had a usable point value.`);
+    return parsed;
   } catch (err) {
     console.error('FantasyPros fetch threw:', err);
     return null;
@@ -109,8 +119,8 @@ async function fetchEspnProjections(season) {
     if (!contentType.includes('application/json')) {
       // Still not JSON even with a browser UA -- log a short preview instead of letting
       // JSON.parse throw an opaque "Unexpected token '<'" error.
-      const preview = (await res.text()).slice(0, 200);
-      console.error(`ESPN returned non-JSON (status ${res.status}): ${preview}`);
+      const preview = (await res.text()).slice(0, 300);
+      console.error(`ESPN returned non-JSON (status ${res.status}, content-type "${contentType}"): ${preview || '(empty body)'}`);
       return null;
     }
     if (!res.ok) {
