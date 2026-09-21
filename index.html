@@ -125,6 +125,13 @@
   .pts{font-family:'Oswald',sans-serif;font-variant-numeric:tabular-nums;}
   .tagbench{color:var(--gold);font-size:10.5px;}
   .tagstart{color:var(--muted-2);font-size:10.5px;}
+  .tag-reserve{display:inline-block;font-size:9px;font-weight:600;letter-spacing:0.3px;border-radius:2px;
+    padding:1px 5px;margin-left:6px;vertical-align:middle;border:1px solid transparent;}
+  .tag-ir{color:#e07a5f;border-color:#e07a5f;background:rgba(224,122,95,0.1);}
+  .tag-taxi{color:#7ea9d8;border-color:#7ea9d8;background:rgba(126,169,216,0.1);}
+  .pick-row{display:flex;justify-content:space-between;align-items:center;padding:6px 4px;font-size:12.5px;
+    border-top:1px dashed var(--line);}
+  .pick-row:first-child{border-top:none;}
 
   /* league picker */
   .picker{border:1px solid var(--line);background:var(--panel);padding:6px 4px;}
@@ -516,6 +523,30 @@ function spoilerBadge(delta){
   return { emoji: '⬛', label: 'Zero Impact', color: 'var(--muted-2)' };
 }
 
+/* Roster Hole Matrix / Position-Zero check: Max PF (as calculated elsewhere on this page)
+   deliberately counts IR/taxi players, matching Sleeper's own behavior — but that can mask a
+   real construction problem: a position where every rostered body is actually unavailable to
+   start. This reruns the same solver using ONLY active players. Any slot that comes back
+   completely unfilled had zero eligible active players — a genuine hole, not just thin depth. */
+function computeRosterHoles(t){
+  const reserveSet = new Set((t.reserve || []).map(String));
+  const taxiSet = new Set((t.taxi || []).map(String));
+  const activeIds = t.players.filter(pid => !reserveSet.has(pid) && !taxiSet.has(pid));
+  const { maxPF: activeOnlyMaxPF, assignment: activeAssignment } = computeMaxPF(activeIds, t.playerPoints, t.playerPos, t.startingSlots);
+
+  const unfilledSlots = [];
+  t.startingSlots.forEach((slot, i) => {
+    if(!activeAssignment[i]) unfilledSlots.push(slot.code);
+  });
+
+  return {
+    burnedPoints: Math.max(0, t.maxPF - activeOnlyMaxPF),
+    activeOnlyMaxPF,
+    unfilledSlots,
+    inactiveCount: t.players.length - activeIds.length
+  };
+}
+
 /* ---------- data loading ---------- */
 async function loadLeagues(){
   const username = $('username').value.trim();
@@ -741,7 +772,7 @@ function buildTeamCalcs(entry, matchups){
 
     return { rosterId: m.roster_id, matchupId: m.matchup_id, teamName, ownerName: (owner.metadata && owner.metadata.team_name) || '',
       actualPts, maxPF, efficiency, assignment, startingSlots, actualStarters, playerPoints, playerPos,
-      players: m.players || [] };
+      players: m.players || [], reserve: roster.reserve || [], taxi: roster.taxi || [] };
   });
 }
 
@@ -1107,6 +1138,52 @@ function renderContent(){
       renderContent();
     });
   }
+
+  const tradeSimBtn = content.querySelector('#tradeSimToggleBtn');
+  if(tradeSimBtn){
+    tradeSimBtn.addEventListener('click', async () => {
+      entry.tradeSimOpen = !entry.tradeSimOpen;
+      if(entry.tradeSimOpen && !entry.tradedPicksCache){
+        entry.tradedPicksLoading = true;
+        renderContent();
+        entry.tradedPicksCache = await fetchTradedPicks(entry);
+        entry.tradedPicksLoading = false;
+      }
+      renderContent();
+    });
+  }
+  const tradeSimTeamSelect = content.querySelector('#tradeSimTeamSelect');
+  if(tradeSimTeamSelect){
+    tradeSimTeamSelect.addEventListener('change', () => {
+      entry.tradeSimTeamId = tradeSimTeamSelect.value || null;
+      entry.tradeSimSelectedPids = new Set();
+      entry.tradeSimResult = null;
+      renderContent();
+    });
+  }
+  content.querySelectorAll('.tradeSimPlayer').forEach(cb => {
+    cb.addEventListener('change', () => {
+      entry.tradeSimSelectedPids = entry.tradeSimSelectedPids || new Set();
+      if(cb.checked) entry.tradeSimSelectedPids.add(cb.value);
+      else entry.tradeSimSelectedPids.delete(cb.value);
+      entry.tradeSimResult = null;
+    });
+  });
+  const tradeSimRunBtn = content.querySelector('#tradeSimRunBtn');
+  if(tradeSimRunBtn){
+    tradeSimRunBtn.addEventListener('click', async () => {
+      if(!entry.tradeSimSelectedPids || entry.tradeSimSelectedPids.size === 0){
+        setStatus('Check at least one player to simulate trading away.', true);
+        return;
+      }
+      entry.tradeSimLoading = true;
+      renderContent();
+      entry.tradeSimResult = await runTradeSimulation(entry);
+      entry.tradeSimLoading = false;
+      renderContent();
+      setStatus('');
+    });
+  }
 }
 
 function renderStandings(entry){
@@ -1194,6 +1271,7 @@ function renderStandings(entry){
   const paceBtn = weeksLeft > 0
     ? `<button class="ghost" id="paceToggleBtn" style="font-size:12px;padding:6px 12px;margin-top:10px;">${entry.paceOpen ? 'Hide' : 'Project'} pace to 1.01</button>`
     : '';
+  const tradeSimBtn = `<button class="ghost" id="tradeSimToggleBtn" style="font-size:12px;padding:6px 12px;margin-top:10px;margin-left:8px;">${entry.tradeSimOpen ? 'Hide' : 'Open'} trade simulator</button>`;
 
   return `<div class="standings">
     <div class="standings-head">
@@ -1203,8 +1281,9 @@ function renderStandings(entry){
     ${rows}
   </div>
   <div style="font-size:10.5px;color:var(--muted-2);margin-top:8px;">${playoffNote}</div>
-  ${paceBtn}
-  ${renderPacePanel(entry)}`;
+  ${paceBtn}${tradeSimBtn}
+  ${renderPacePanel(entry)}
+  ${renderTradeSimPanel(entry)}`;
 }
 
 /* ---------- Pace to 1.01 (rest-of-season projection) ---------- */
@@ -1244,13 +1323,23 @@ async function fetchWeekProjectionPoints(season, week, scoringSettings){
   return points;
 }
 
+// Shared per-league cache so Pace to 1.01 and the Trade Simulator reuse the same weekly
+// projection fetches instead of each hitting the network separately.
+async function getProjectionPointsForWeek(entry, week){
+  entry.roSProjectionCache = entry.roSProjectionCache || {};
+  if(week in entry.roSProjectionCache) return entry.roSProjectionCache[week];
+  const scoringSettings = entry.league.scoring_settings || {};
+  const points = await fetchWeekProjectionPoints(currentSeason, week, scoringSettings);
+  entry.roSProjectionCache[week] = points; // cache null too, so a failed week isn't retried all session
+  return points;
+}
+
 async function computePaceProjection(entry){
   const remaining = [];
   for(let w = currentWeek + 1; w <= LEAGUE_FINAL_WEEK; w++) remaining.push(w);
   if(remaining.length === 0) return { available: false, reason: 'season-over' };
 
   const startingSlots = getStartingSlots(entry.league);
-  const scoringSettings = entry.league.scoring_settings || {};
 
   const neededIds = new Set();
   entry.rosters.forEach(r => (r.players || []).forEach(id => neededIds.add(id)));
@@ -1261,7 +1350,7 @@ async function computePaceProjection(entry){
 
   let anyWeekUsable = false;
   for(const w of remaining){
-    const projPoints = await fetchWeekProjectionPoints(currentSeason, w, scoringSettings);
+    const projPoints = await getProjectionPointsForWeek(entry, w);
     if(!projPoints) continue;
     anyWeekUsable = true;
     entry.rosters.forEach(r => {
@@ -1327,6 +1416,232 @@ function renderPacePanel(entry){
   <div style="font-size:10.5px;color:var(--muted-2);margin-top:8px;">"To catch 1st" is the average Max PF per week a team would need to shed below its current pace to close the projected gap with the leader by week ${LEAGUE_FINAL_WEEK}. Assumes each roster's current players stay on it the rest of the way — trades and waiver moves aren't projected.</div>`;
 }
 
+/* ---------- Trade Simulator: Max PF impact of trading players away ---------- */
+async function runTradeSimulation(entry){
+  const rosterId = entry.tradeSimTeamId;
+  const removed = entry.tradeSimSelectedPids || new Set();
+  if(!rosterId || removed.size === 0) return null;
+
+  const startingSlots = getStartingSlots(entry.league);
+  const roster = entry.rosters.find(r => String(r.roster_id) === String(rosterId));
+  if(!roster) return null;
+
+  // This week's impact, using real actual points already loaded for the current week.
+  const weekCalc = (entry.weeklyCalcs[currentWeek] || []).find(c => String(c.rosterId) === String(rosterId));
+  let thisWeekDelta = null;
+  if(weekCalc){
+    const subIds = weekCalc.players.filter(pid => !removed.has(pid));
+    const { maxPF: subMaxPF } = computeMaxPF(subIds, weekCalc.playerPoints, weekCalc.playerPos, weekCalc.startingSlots);
+    thisWeekDelta = Math.max(0, weekCalc.maxPF - subMaxPF);
+  }
+
+  // Rest-of-season impact, using the same projection data source as Pace to 1.01.
+  const neededIds = new Set(roster.players || []);
+  await ensurePlayersLoaded([...neededIds]);
+  const playerPos = {};
+  (roster.players || []).forEach(pid => { playerPos[pid] = (playersMap[pid] && playersMap[pid].pos) || 'DEF'; });
+
+  const remaining = [];
+  for(let w = currentWeek + 1; w <= LEAGUE_FINAL_WEEK; w++) remaining.push(w);
+
+  let rosDelta = 0, weeksUsed = 0;
+  for(const w of remaining){
+    const projPoints = await getProjectionPointsForWeek(entry, w);
+    if(!projPoints) continue;
+    weeksUsed++;
+    const allIds = roster.players || [];
+    const subIds = allIds.filter(pid => !removed.has(pid));
+    const { maxPF: fullMaxPF } = computeMaxPF(allIds, projPoints, playerPos, startingSlots);
+    const { maxPF: subMaxPF } = computeMaxPF(subIds, projPoints, playerPos, startingSlots);
+    rosDelta += Math.max(0, fullMaxPF - subMaxPF);
+  }
+
+  return {
+    thisWeekDelta,
+    rosDelta: weeksUsed > 0 ? rosDelta : null,
+    weeksUsed,
+    weeksTotal: remaining.length
+  };
+}
+
+function pickTier(pickNumber, totalPicks){
+  if(!totalPicks || !pickNumber) return null;
+  const diamondCount = Math.max(1, Math.ceil(totalPicks / 3));
+  const remaining = totalPicks - diamondCount;
+  const starCount = Math.max(1, Math.ceil(remaining / 2));
+  if(pickNumber <= diamondCount) return { emoji: '💎', label: 'Diamond', color: '#7dd3fc', lo: 1, hi: diamondCount };
+  if(pickNumber <= diamondCount + starCount) return { emoji: '⭐', label: 'Star', color: 'var(--gold)', lo: diamondCount+1, hi: diamondCount+starCount };
+  return { emoji: '🥉', label: 'Bronze', color: '#c58b4a', lo: diamondCount+starCount+1, hi: totalPicks };
+}
+
+async function fetchTradedPicks(entry){
+  try{
+    const leagueId = entry.league.league_id;
+    const data = await fetchJSON(`${BASE}/league/${leagueId}/traded_picks`);
+    return data || [];
+  }catch(err){
+    console.error(err);
+    return [];
+  }
+}
+
+function computeTeamDraftPicks(entry, rosterId){
+  // Sleeper tracks pick trades up to 3 years out. Only the very next class has a real
+  // slot number (this season's live Max PF tank race decides it) — 2nd/3rd-year-out
+  // picks show round-only, since nobody's draft order is set that far ahead.
+  const tradedPicks = entry.tradedPicksCache || [];
+  const rosters = entry.rosters || [];
+  const rounds = (entry.league.settings && entry.league.settings.draft_rounds) || 4;
+  const seasonBase = Number(entry.league.season) || new Date().getFullYear();
+  const targetSeasons = [seasonBase + 1, seasonBase + 2, seasonBase + 3];
+  const standings = entry.seasonStandings || [];
+
+  const rosterName = (rid) => {
+    const r = rosters.find(rr => String(rr.roster_id) === String(rid));
+    const u = r && (entry.users || []).find(uu => uu.user_id === r.owner_id);
+    return (u && (u.display_name || (u.metadata && u.metadata.team_name))) || `Team ${rid}`;
+  };
+  const slotFor = (identityId) => {
+    const t = standings.find(s => String(s.rosterId) === String(identityId));
+    return t ? t.pickNumber : null;
+  };
+
+  const picks = [];
+  targetSeasons.forEach((targetSeason, seasonIdx) => {
+    const hasKnownSlot = seasonIdx === 0; // only the upcoming class has a live slot
+    for(let round = 1; round <= rounds; round++){
+      rosters.forEach(r => {
+        const identityId = r.roster_id;
+        const trade = tradedPicks.find(p =>
+          String(p.season) === String(targetSeason) && p.round === round && String(p.roster_id) === String(identityId));
+        const ownerId = trade ? trade.owner_id : identityId;
+        if(String(ownerId) === String(rosterId)){
+          const slot = hasKnownSlot ? slotFor(identityId) : null;
+          picks.push({
+            season: targetSeason,
+            round,
+            slot,
+            label: slot ? `${round}.${String(slot).padStart(2,'0')}` : `Round ${round}`,
+            original: trade ? rosterName(identityId) : null
+          });
+        }
+      });
+    }
+  });
+  return picks.sort((a,b) => a.season - b.season || a.round - b.round || (a.slot||99) - (b.slot||99));
+}
+
+function renderTradeSimPanel(entry){
+  if(!entry.tradeSimOpen) return '';
+  const standings = entry.seasonStandings || [];
+  const totalPicks = standings.length;
+  const teamOptions = standings.map(t => {
+    const tier = pickTier(t.pickNumber, totalPicks);
+    const tierTxt = tier ? ` — Pick ${t.pickNumber} ${tier.emoji} ${tier.label}` : '';
+    return `<option value="${t.rosterId}" ${String(entry.tradeSimTeamId) === String(t.rosterId) ? 'selected' : ''}>${t.teamName}${tierTxt}</option>`;
+  }).join('');
+
+  let rosterChecklist = '';
+  let tierBanner = '';
+  let picksHtml = '';
+  if(entry.tradeSimTeamId){
+    const roster = entry.rosters.find(r => String(r.roster_id) === String(entry.tradeSimTeamId));
+    const teamTotals = standings.find(t => String(t.rosterId) === String(entry.tradeSimTeamId));
+    const players = (roster && roster.players) || [];
+    const seasonPts = (teamTotals && teamTotals.playerPoints) || {};
+    const reserveSet = new Set((roster && roster.reserve || []).map(String));
+    const taxiSet = new Set((roster && roster.taxi || []).map(String));
+    const sorted = players.slice().sort((a,b) => (seasonPts[b]||0) - (seasonPts[a]||0));
+    const selected = entry.tradeSimSelectedPids || new Set();
+    rosterChecklist = sorted.map(pid => {
+      const meta = playersMap[pid] || {};
+      const reserveTag = reserveSet.has(String(pid))
+        ? `<span class="tag-reserve tag-ir">IR</span>`
+        : taxiSet.has(String(pid))
+          ? `<span class="tag-reserve tag-taxi">Taxi</span>`
+          : '';
+      return `<label class="picker-row" style="padding:8px 4px;cursor:pointer;">
+        <input type="checkbox" class="tradeSimPlayer" value="${pid}" ${selected.has(pid) ? 'checked' : ''}>
+        <span style="flex:1;font-size:13px;">${meta.name || pid} <span class="pos-badge">${meta.pos || '—'}</span>${reserveTag}</span>
+        <span style="font-size:11.5px;color:var(--muted-2);">${(seasonPts[pid]||0).toFixed(1)} season pts</span>
+      </label>`;
+    }).join('');
+
+    if(entry.tradedPicksLoading){
+      picksHtml = `<div style="font-size:11.5px;color:var(--muted);padding:8px 4px;">Loading draft picks…</div>`;
+    } else if(entry.tradedPicksCache){
+      const picks = computeTeamDraftPicks(entry, entry.tradeSimTeamId);
+      const bySeason = new Map();
+      picks.forEach(p => {
+        if(!bySeason.has(p.season)) bySeason.set(p.season, []);
+        bySeason.get(p.season).push(p);
+      });
+      const seasonBlocks = [...bySeason.entries()].map(([season, seasonPicks]) => `
+        <div style="font-size:10.5px;color:var(--muted);margin:10px 0 4px;">${season}</div>
+        ${seasonPicks.map(p => `<div class="pick-row">
+            <span style="font-family:'Oswald',sans-serif;">${p.label}</span>
+            <span>${p.original ? `<span style="color:var(--muted-2);">via ${p.original}</span>` : ''}</span>
+          </div>`).join('')}`).join('');
+      picksHtml = `<div style="margin-top:6px;margin-bottom:14px;">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Draft picks owned — not included in the Max PF simulation, shown for context</div>
+        ${picks.length ? seasonBlocks : `<div class="cand-empty">No tracked future picks found for this team.</div>`}
+        <div style="font-size:10px;color:var(--muted-2);margin-top:8px;">Round.pick format for the upcoming class, with the slot matching this season's live Max PF draft order — it'll keep shifting until the season locks in. The two years beyond that show round only, since no draft order exists for them yet.</div>
+      </div>`;
+    }
+
+    if(teamTotals){
+      const tier = pickTier(teamTotals.pickNumber, totalPicks);
+      if(tier){
+        tierBanner = `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:12px;
+          border:1px solid var(--line);border-radius:6px;background:var(--panel-2);">
+          <span style="font-size:20px;">${tier.emoji}</span>
+          <div>
+            <div style="font-size:13.5px;font-weight:600;color:${tier.color};">Pick ${teamTotals.pickNumber} · ${tier.label} tier</div>
+            <div style="font-size:10.5px;color:var(--muted-2);">${tier.label} covers picks ${tier.lo}–${tier.hi} in the current 1.01 race</div>
+          </div>
+        </div>`;
+      }
+    }
+  }
+
+  let resultHtml = '';
+  if(entry.tradeSimLoading){
+    resultHtml = `<div style="padding:12px 4px;font-size:12.5px;color:var(--muted);">Running the solver with and without the selected players…</div>`;
+  } else if(entry.tradeSimResult){
+    const r = entry.tradeSimResult;
+    const weekNote = r.thisWeekDelta == null ? '—' : `-${r.thisWeekDelta.toFixed(1)} pts`;
+    const rosNote = r.rosDelta == null
+      ? `unavailable (projection data didn't load for any remaining week)`
+      : `-${r.rosDelta.toFixed(1)} pts over ${r.weeksUsed}/${r.weeksTotal} projected remaining weeks`;
+    resultHtml = `<div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px;font-size:12.5px;line-height:1.6;">
+      <div><span style="color:var(--muted-2);">This week's Max PF:</span> <b style="color:${r.thisWeekDelta > 0 ? 'var(--good)' : 'var(--ink)'};">${weekNote}</b></div>
+      <div><span style="color:var(--muted-2);">Projected rest-of-season Max PF:</span> <b style="color:${(r.rosDelta||0) > 0 ? 'var(--good)' : 'var(--ink)'};">${rosNote}</b></div>
+    </div>`;
+  }
+
+  return `<div class="standings" style="margin-top:14px;">
+    <div class="standings-head">
+      <h3>Trade Simulator</h3>
+      <span class="sub">how much lower this team's Max PF would go if these players were traded away</span>
+    </div>
+    <div style="padding:14px;">
+      <div class="field" style="margin-bottom:12px;">
+        <label for="tradeSimTeamSelect">Team</label>
+        <select id="tradeSimTeamSelect" style="width:100%;max-width:320px;">
+          <option value="">Choose a team…</option>
+          ${teamOptions}
+        </select>
+      </div>
+      ${tierBanner}
+      <div id="tradeSimRoster">${rosterChecklist}</div>
+      ${picksHtml}
+      ${entry.tradeSimTeamId ? `<button id="tradeSimRunBtn" style="margin-top:12px;">Run simulation</button>` : ''}
+      ${resultHtml}
+      <div style="font-size:10px;color:var(--muted-2);margin-top:12px;line-height:1.4;">Models removing players only — it doesn't simulate what comes back in return (a rookie pick or an IR stash typically won't move the needle). Rest-of-season uses the same projection data as Pace to 1.01.</div>
+    </div>
+  </div>`;
+}
+
 function topPositionalCliffs(teamTotals, n){
   return (teamTotals.currentPlayers || [])
     .map(pid => ({ pid, pts: teamTotals.playerPoints[pid] || 0, impact: teamTotals.playerImpact[pid] || 0, meta: playersMap[pid] || {} }))
@@ -1343,6 +1658,13 @@ function renderTeamRow(t){
   let detailHtml = '';
   if(isOpen){
     const impacts = computePlayerImpacts(t);
+    const reserveSet = new Set((t.reserve || []).map(String));
+    const taxiSet = new Set((t.taxi || []).map(String));
+    const sourceTag = (pid) => {
+      if(reserveSet.has(String(pid))) return ' <span class="tagbench" style="color:#e07a5f;">(from IR)</span>';
+      if(taxiSet.has(String(pid))) return ' <span class="tagbench" style="color:#7ea9d8;">(from taxi squad)</span>';
+      return ' <span class="tagbench">(from bench)</span>';
+    };
     const rows = [];
     t.startingSlots.forEach((slot, i) => {
       const optPid = t.assignment[i];
@@ -1356,7 +1678,7 @@ function renderTeamRow(t){
         : '';
       rows.push(`<tr class="${wasStarting ? '' : 'swap'}">
         <td><span class="pos-badge">${slot.code}</span></td>
-        <td>${optName}${!wasStarting ? ' <span class="tagbench">(from bench)</span>' : ''}${badgeHtml}</td>
+        <td>${optName}${!wasStarting ? sourceTag(optPid) : ''}${badgeHtml}</td>
         <td style="text-align:right;" class="pts">${optPts.toFixed(2)}</td>
       </tr>`);
     });
@@ -1364,6 +1686,13 @@ function renderTeamRow(t){
       const p = playersMap[pid] || {};
       return `<tr><td><span class="pos-badge">${p.pos||'—'}</span></td><td>${p.name||pid}</td><td style="text-align:right;" class="pts">${(t.playerPoints[pid]||0).toFixed(2)}</td></tr>`;
     }).join('');
+
+    const holes = computeRosterHoles(t);
+    const holesHtml = holes.unfilledSlots.length
+      ? `<div style="color:var(--bad);">🔴 No active player can fill: ${[...new Set(holes.unfilledSlots)].join(', ')} — every rostered player at that position is on IR or taxi (or you don't have one at all).</div>`
+      : (holes.burnedPoints > 0.5
+          ? `<div style="color:var(--muted);">Every slot is fillable with active players, but your Max PF is counting ${holes.burnedPoints.toFixed(1)} pts from IR/taxi players who couldn't actually be started.</div>`
+          : `<div style="color:var(--good);">No construction issues — Max PF here reflects what you could actually start.</div>`);
 
     detailHtml = `<div class="detail open">
       <div style="display:flex;gap:24px;flex-wrap:wrap;">
@@ -1376,6 +1705,10 @@ function renderTeamRow(t){
           <table><thead><tr><th>Slot</th><th>Player</th><th style="text-align:right;">Pts</th></tr></thead><tbody>${rows.join('')}</tbody></table>
           <div style="font-size:10px;color:var(--muted-2);margin-top:6px;line-height:1.4;">Badge = Net Max PF Impact: how much this week's Max PF would drop if this player weren't on the roster at all. 🔴 ≥10 pts · 🟠 5–10 · ⚪ under 5 · ⬛ not in the optimal lineup.</div>
         </div>
+      </div>
+      <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px;font-size:11.5px;line-height:1.5;">
+        <div style="color:var(--muted);margin-bottom:4px;">Roster construction check (active players only, IR/taxi excluded)</div>
+        ${holesHtml}
       </div>
     </div>`;
   }
