@@ -218,7 +218,7 @@
     color: var(--db-text, #e8e9ec); font-family: 'Inter', system-ui, sans-serif;
   }
   .db-round-title { margin: 0 0 10px; font-size: 1rem; color: var(--db-text, #e8e9ec); font-family:'Oswald',sans-serif; }
-  .db-round-picks { display: grid; grid-template-columns: repeat(10, minmax(88px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+  .db-round-picks { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(74px, 1fr); gap: 10px; overflow-x: auto; padding-bottom: 4px; }
   .db-pick-card {
     background: var(--db-panel, #161922); border: 1px solid var(--db-panel-border, #262b38);
     border-radius: var(--db-radius, 10px); padding: 10px 12px; display: flex; flex-direction: column;
@@ -228,8 +228,8 @@
   .db-pick-card.db-pick-traded { border-color: var(--db-amber, #f0b429); }
   .db-pick-num { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; color: var(--db-muted, #9099a8); font-family:'Oswald',sans-serif; }
   .db-pick-avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
-  .db-pick-team { font-size: 0.68rem; font-weight: 600; color: var(--db-text, #e8e9ec); overflow-wrap: break-word; line-height: 1.2; }
-  .db-pick-via { font-size: 0.72rem; color: var(--db-amber, #f0b429); }
+  .db-pick-team { font-size: 0.68rem; font-weight: 600; color: var(--db-text, #e8e9ec); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+  .db-pick-via { font-size: 0.72rem; color: var(--db-amber, #f0b429); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
   .db-drawer {
     position: fixed; top: 0; right: 0; height: 100vh; width: min(400px, 92vw);
     background: var(--db-panel, #161922); border-left: 1px solid var(--db-panel-border, #262b38);
@@ -248,7 +248,7 @@
   .db-trade-arrow { font-size: 0.7rem; color: var(--db-muted, #9099a8); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
   .db-trade-gains { margin: 0; padding-left: 18px; font-size: 0.88rem; color: var(--db-text, #e8e9ec); }
   @media (max-width: 640px) {
-    .db-round-picks { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+    .db-round-picks { grid-auto-columns: minmax(96px, 1fr); }
     .db-pick-card { min-height: 44px; }
     .db-drawer { width: 100%; }
   }
@@ -2265,7 +2265,7 @@ setStatus('Enter your Sleeper username above to get started.');
             <h3 class="db-round-title">Round ${r.round}</h3>
             <div class="db-round-picks">
               ${r.picks.map((p, idx) => `
-                <div class="db-pick-card ${p.traded ? "db-pick-traded" : ""}" data-round="${r.round}" data-idx="${idx}" tabindex="0" role="button">
+                <div class="db-pick-card ${p.traded ? "db-pick-traded" : ""}" data-round="${r.round}" data-idx="${idx}" tabindex="0" role="button" title="${escapeHtml(p.ownerName)}${p.traded ? ` (via ${escapeHtml(p.originalName)})` : ""}">
                   <span class="db-pick-num">${p.label}</span>
                   ${p.ownerAvatar ? `<img class="db-pick-avatar" src="${p.ownerAvatar}" alt="">` : ""}
                   <span class="db-pick-team">${escapeHtml(p.ownerName)}</span>
