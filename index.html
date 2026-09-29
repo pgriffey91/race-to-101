@@ -226,6 +226,10 @@
   }
   .db-pick-card:hover, .db-pick-card:focus-visible { border-color: var(--db-accent, #3b82f6); transform: translateY(-2px); outline: none; }
   .db-pick-card.db-pick-traded { border-color: var(--db-amber, #f0b429); }
+  .db-pick-card.db-pick-mine {
+    background: rgba(111,207,110,0.16); border-color: var(--good, #6fcf6e); border-width: 2px;
+  }
+  .db-pick-card.db-pick-mine .db-pick-team { color: var(--good, #6fcf6e); }
   .db-pick-num { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; color: var(--db-muted, #9099a8); font-family:'Oswald',sans-serif; }
   .db-pick-avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
   .db-pick-team { font-size: 0.68rem; font-weight: 600; color: var(--db-text, #e8e9ec); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
@@ -368,6 +372,7 @@ let openDetailRosterId = null;
 let openStandingsRosterId = null;
 let draftBoardMountedIdx = -1; // which leaguesData index currently owns the shared #draftBoardMount node
 let currentUsername = '';
+let currentUserId = '';
 let currentSeason = '';
 
 const $ = (id) => document.getElementById(id);
@@ -618,6 +623,7 @@ async function loadLeagues(){
     nflState = await fetchJSON(`${BASE}/state/nfl`);
     const leagues = await fetchJSON(`${BASE}/user/${user.user_id}/leagues/nfl/${season}`);
     currentUsername = username;
+    currentUserId = user.user_id;
     currentSeason = season;
     allLeagues = leagues || [];
 
@@ -1226,11 +1232,13 @@ function renderContent(){
       const needsFreshInit = draftBoardMountedIdx !== currentLeagueIdx || !entry.draftBoardApi;
       if(needsFreshInit){
         try{
+          const myRoster = (entry.rosters || []).find(r => String(r.owner_id) === String(currentUserId));
           entry.draftBoardApi = await DraftBoard.init({
             leagueId: entry.league.league_id,
             container: mount,
             rounds: (entry.league.settings && entry.league.settings.draft_rounds) || 4,
             maxWeek: LEAGUE_FINAL_WEEK,
+            myRosterId: myRoster ? myRoster.roster_id : null,
             // Reuse this app's own live tank-race order instead of the widget's
             // built-in default rule, so the board always matches the standings above.
             pickOrderFn: () => (entry.seasonStandings || []).slice()
@@ -2258,6 +2266,8 @@ setStatus('Enter your Sleeper username above to get started.');
     return `
       <p class="db-sub">
         ${board.season} rookie draft order. Click any pick to see how it was acquired.
+        <span style="color:var(--good,#6fcf6e);">■</span> your picks ·
+        <span style="color:var(--db-amber,#f0b429);">▢</span> traded pick
       </p>
       <div class="db-board">
         ${board.rounds.map((r) => `
@@ -2265,7 +2275,7 @@ setStatus('Enter your Sleeper username above to get started.');
             <h3 class="db-round-title">Round ${r.round}</h3>
             <div class="db-round-picks">
               ${r.picks.map((p, idx) => `
-                <div class="db-pick-card ${p.traded ? "db-pick-traded" : ""}" data-round="${r.round}" data-idx="${idx}" tabindex="0" role="button" title="${escapeHtml(p.ownerName)}${p.traded ? ` (via ${escapeHtml(p.originalName)})` : ""}">
+                <div class="db-pick-card ${p.traded ? "db-pick-traded" : ""} ${p.isMine ? "db-pick-mine" : ""}" data-round="${r.round}" data-idx="${idx}" tabindex="0" role="button" title="${escapeHtml(p.ownerName)}${p.traded ? ` (via ${escapeHtml(p.originalName)})` : ""}">
                   <span class="db-pick-num">${p.label}</span>
                   ${p.ownerAvatar ? `<img class="db-pick-avatar" src="${p.ownerAvatar}" alt="">` : ""}
                   <span class="db-pick-team">${escapeHtml(p.ownerName)}</span>
@@ -2285,7 +2295,7 @@ setStatus('Enter your Sleeper username above to get started.');
 
   async function init(userConfig) {
     const config = Object.assign(
-      { rounds: 4, playoffSpots: 6, totalTeams: 10, maxWeek: 18 },
+      { rounds: 4, playoffSpots: 6, totalTeams: 10, maxWeek: 18, myRosterId: null },
       userConfig
     );
     if (!config.leagueId) throw new Error("DraftBoard.init: config.leagueId is required");
@@ -2322,11 +2332,12 @@ setStatus('Enter your Sleeper username above to get started.');
           const traded = ownerRid !== originalRid;
           const owner = rosterMap.get(ownerRid) || rosterMap.get(Number(ownerRid));
           const original = rosterMap.get(originalRid) || rosterMap.get(Number(originalRid));
+          const isMine = config.myRosterId != null && String(ownerRid) === String(config.myRosterId);
           return {
             label: `${round}.${String(idx + 1).padStart(2, "0")}`,
             ownerName: owner ? owner.name : `Roster ${ownerRid}`,
             ownerAvatar: owner ? owner.avatar : null,
-            traded,
+            traded, isMine,
             originalName: original ? original.name : `Roster ${originalRid}`,
             originalRid, ownerRid, round, season: nextSeason,
             acquisition: null,
