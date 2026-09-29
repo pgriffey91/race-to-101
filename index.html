@@ -199,6 +199,59 @@
     .stand-row{grid-template-columns:22px 1fr auto auto;}
     .stand-hide-mobile{display:none;}
   }
+
+  /* ---------- Draft Board widget (imported) ---------- */
+  .db-root, .db-board, .db-drawer {
+    --db-bg: var(--bg);
+    --db-panel: var(--panel);
+    --db-panel-border: var(--line);
+    --db-text: var(--ink);
+    --db-muted: var(--muted-2);
+    --db-accent: var(--gold);
+    --db-amber: var(--orange);
+    --db-radius: 10px;
+  }
+  .db-sub { color: var(--db-muted, #9099a8); font-size: 0.85rem; margin: 0 0 14px; }
+  .db-empty { text-align: center; color: var(--db-muted, #9099a8); padding: 40px 20px; }
+  .db-board {
+    display: flex; flex-direction: column; gap: 22px; margin-bottom: 28px;
+    color: var(--db-text, #e8e9ec); font-family: 'Inter', system-ui, sans-serif;
+  }
+  .db-round-title { margin: 0 0 10px; font-size: 1rem; color: var(--db-text, #e8e9ec); font-family:'Oswald',sans-serif; }
+  .db-round-picks { display: grid; grid-template-columns: repeat(10, minmax(88px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+  .db-pick-card {
+    background: var(--db-panel, #161922); border: 1px solid var(--db-panel-border, #262b38);
+    border-radius: var(--db-radius, 10px); padding: 10px 12px; display: flex; flex-direction: column;
+    gap: 4px; position: relative; cursor: pointer; transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+  .db-pick-card:hover, .db-pick-card:focus-visible { border-color: var(--db-accent, #3b82f6); transform: translateY(-2px); outline: none; }
+  .db-pick-card.db-pick-traded { border-color: var(--db-amber, #f0b429); }
+  .db-pick-num { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; color: var(--db-muted, #9099a8); font-family:'Oswald',sans-serif; }
+  .db-pick-avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
+  .db-pick-team { font-size: 0.68rem; font-weight: 600; color: var(--db-text, #e8e9ec); overflow-wrap: break-word; line-height: 1.2; }
+  .db-pick-via { font-size: 0.72rem; color: var(--db-amber, #f0b429); }
+  .db-drawer {
+    position: fixed; top: 0; right: 0; height: 100vh; width: min(400px, 92vw);
+    background: var(--db-panel, #161922); border-left: 1px solid var(--db-panel-border, #262b38);
+    box-shadow: -12px 0 32px rgba(0, 0, 0, 0.4); padding: 24px 20px; overflow-y: auto; z-index: 50;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  .db-drawer-title { margin: 0 0 6px; color: var(--db-text, #e8e9ec); font-family:'Oswald',sans-serif; }
+  .db-drawer-sub { color: var(--db-muted, #9099a8); font-size: 0.82rem; margin: 0 0 16px; line-height: 1.5; }
+  .db-drawer-close {
+    margin-top: 18px; width: 100%; background: transparent; border: 1px solid var(--db-panel-border, #262b38);
+    color: var(--db-text, #e8e9ec); padding: 9px; border-radius: var(--db-radius, 10px); cursor: pointer;
+  }
+  .db-drawer-close:hover { border-color: var(--db-accent, #3b82f6); }
+  .db-trade-teams { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+  .db-trade-team-name { font-weight: 700; color: var(--db-text, #e8e9ec); margin-bottom: 2px; }
+  .db-trade-arrow { font-size: 0.7rem; color: var(--db-muted, #9099a8); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+  .db-trade-gains { margin: 0; padding-left: 18px; font-size: 0.88rem; color: var(--db-text, #e8e9ec); }
+  @media (max-width: 640px) {
+    .db-round-picks { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+    .db-pick-card { min-height: 44px; }
+    .db-drawer { width: 100%; }
+  }
 </style>
 </head>
 <body>
@@ -292,6 +345,7 @@
   <div id="tabs" class="tabs"></div>
   <div id="weekbar" class="weekbar" style="display:none;"></div>
   <div id="content"></div>
+  <div id="draftBoardMount" class="db-root" style="display:none;margin-top:14px;"></div>
 
   <footer>
     Data from the public <a href="https://docs.sleeper.com/" target="_blank" rel="noopener">Sleeper API</a>, fetched live in your browser — nothing is sent to a server. Dynasty trade values from <a href="https://fantasycalc.com" target="_blank" rel="noopener">FantasyCalc</a>.
@@ -312,6 +366,7 @@ let nflState = null;
 let autoTimer = null;
 let openDetailRosterId = null;
 let openStandingsRosterId = null;
+let draftBoardMountedIdx = -1; // which leaguesData index currently owns the shared #draftBoardMount node
 let currentUsername = '';
 let currentSeason = '';
 
@@ -699,6 +754,10 @@ function renderTabs(){
     t.textContent = entry.league.name || `League ${i+1}`;
     t.onclick = async () => {
       if(i === currentLeagueIdx) return;
+      const prevEntry = leaguesData[currentLeagueIdx];
+      if(prevEntry) prevEntry.draftBoardOpen = false;
+      const dbMount = $('draftBoardMount');
+      if(dbMount) dbMount.style.display = 'none';
       currentLeagueIdx = i;
       openDetailRosterId = null;
       $('settingsDrawerPanel').style.display = 'none';
@@ -1152,6 +1211,42 @@ function renderContent(){
       renderContent();
     });
   }
+  const draftBoardBtn = content.querySelector('#draftBoardToggleBtn');
+  if(draftBoardBtn){
+    draftBoardBtn.addEventListener('click', async () => {
+      const mount = $('draftBoardMount');
+      entry.draftBoardOpen = !entry.draftBoardOpen;
+      if(!entry.draftBoardOpen){
+        if(mount) mount.style.display = 'none';
+        renderContent();
+        return;
+      }
+      if(mount) mount.style.display = 'block';
+      renderContent(); // flip the button label to "Hide" right away
+      const needsFreshInit = draftBoardMountedIdx !== currentLeagueIdx || !entry.draftBoardApi;
+      if(needsFreshInit){
+        try{
+          entry.draftBoardApi = await DraftBoard.init({
+            leagueId: entry.league.league_id,
+            container: mount,
+            rounds: (entry.league.settings && entry.league.settings.draft_rounds) || 4,
+            maxWeek: LEAGUE_FINAL_WEEK,
+            // Reuse this app's own live tank-race order instead of the widget's
+            // built-in default rule, so the board always matches the standings above.
+            pickOrderFn: () => (entry.seasonStandings || []).slice()
+              .sort((a, b) => a.pickNumber - b.pickNumber)
+              .map(t => t.rosterId)
+          });
+          draftBoardMountedIdx = currentLeagueIdx;
+        }catch(err){
+          console.error(err);
+          if(mount) mount.innerHTML = '<div class="db-empty">Couldn\'t load the draft board right now.</div>';
+        }
+      }
+      // else: reopening the same league — the mount still holds its last-rendered
+      // board (only display:none was toggled), so nothing to refetch.
+    });
+  }
   const tradeSimTeamSelect = content.querySelector('#tradeSimTeamSelect');
   if(tradeSimTeamSelect){
     tradeSimTeamSelect.addEventListener('change', () => {
@@ -1272,6 +1367,7 @@ function renderStandings(entry){
     ? `<button class="ghost" id="paceToggleBtn" style="font-size:12px;padding:6px 12px;margin-top:10px;">${entry.paceOpen ? 'Hide' : 'Project'} pace to 1.01</button>`
     : '';
   const tradeSimBtn = `<button class="ghost" id="tradeSimToggleBtn" style="font-size:12px;padding:6px 12px;margin-top:10px;margin-left:8px;">${entry.tradeSimOpen ? 'Hide' : 'Open'} trade simulator</button>`;
+  const draftBoardBtn = `<button class="ghost" id="draftBoardToggleBtn" style="font-size:12px;padding:6px 12px;margin-top:10px;margin-left:8px;">${entry.draftBoardOpen ? 'Hide' : 'Show'} draft board</button>`;
 
   return `<div class="standings">
     <div class="standings-head">
@@ -1281,7 +1377,7 @@ function renderStandings(entry){
     ${rows}
   </div>
   <div style="font-size:10.5px;color:var(--muted-2);margin-top:8px;">${playoffNote}</div>
-  ${paceBtn}${tradeSimBtn}
+  ${paceBtn}${tradeSimBtn}${draftBoardBtn}
   ${renderPacePanel(entry)}
   ${renderTradeSimPanel(entry)}`;
 }
@@ -1837,6 +1933,516 @@ $('season').addEventListener('keydown', e => { if(e.key === 'Enter') loadLeagues
 // no default username — wait for the visitor to enter their own and click Load leagues
 loadManualBluechips();
 setStatus('Enter your Sleeper username above to get started.');
+
+/* ================================================================
+ * Sleeper Rookie Draft Board — standalone widget (imported)
+ * Self-contained: fetches its own data straight from Sleeper's public
+ * API. The only hook into the rest of this page is `pickOrderFn`,
+ * wired up below to reuse this app's own tank-race pick order
+ * (entry.seasonStandings) instead of the widget's built-in default
+ * rule, so the draft board always matches the live standings above.
+ * ================================================================ */
+(function (global) {
+  "use strict";
+
+  const API = "https://api.sleeper.app/v1";
+
+  async function fetchJSON(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}`);
+    return res.json();
+  }
+
+  async function fetchJSONWithRetry(url, attempts = 3, delayMs = 500) {
+    let lastErr;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        return await fetchJSON(url);
+      } catch (err) {
+        lastErr = err;
+        if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
+      }
+    }
+    throw lastErr;
+  }
+
+  function eligiblePositionsForSlot(slot) {
+    switch (slot) {
+      case "FLEX": return ["RB", "WR", "TE"];
+      case "SUPER_FLEX": return ["QB", "RB", "WR", "TE"];
+      case "WRRB_FLEX": return ["WR", "RB"];
+      case "REC_FLEX":
+      case "WRTE_FLEX": return ["WR", "TE"];
+      case "RB_FLEX": return ["RB", "WR"];
+      case "IDP_FLEX": return ["DL", "LB", "DB"];
+      default: return [slot];
+    }
+  }
+  const NON_STARTING_SLOTS = new Set(["BN", "IR", "TAXI"]);
+
+  function computeOptimalLineupPoints(playerIds, playersPoints, rosterPositions, playersDb) {
+    const startSlots = (rosterPositions || []).filter((p) => !NON_STARTING_SLOTS.has(p));
+    if (!startSlots.length || !playerIds || !playerIds.length) return 0;
+    const slotsSorted = startSlots
+      .map((slot, i) => ({ slot, i, elig: eligiblePositionsForSlot(slot) }))
+      .sort((a, b) => a.elig.length - b.elig.length || a.i - b.i);
+    const available = new Set(playerIds);
+    let total = 0;
+    for (const { elig } of slotsSorted) {
+      let bestId = null;
+      let bestPts = -Infinity;
+      for (const pid of available) {
+        const p = playersDb.get(String(pid));
+        const positions = p && p.fantasyPositions && p.fantasyPositions.length ? p.fantasyPositions : p ? [p.pos] : [];
+        if (!positions.some((pos) => elig.includes(pos))) continue;
+        const pts = playersPoints[pid] != null ? playersPoints[pid] : 0;
+        if (pts > bestPts) { bestPts = pts; bestId = pid; }
+      }
+      if (bestId != null) { available.delete(bestId); total += bestPts; }
+    }
+    return total;
+  }
+
+  async function loadPlayersDb() {
+    const cacheKey = "sleeper_players_nfl_v1";
+    const cacheTsKey = "sleeper_players_nfl_v1_ts";
+    const maxAgeMs = 24 * 3600 * 1000;
+    const db = new Map();
+    let data = null;
+    try {
+      const ts = Number(localStorage.getItem(cacheTsKey) || 0);
+      if (ts && Date.now() - ts < maxAgeMs) {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) data = JSON.parse(cached);
+      }
+    } catch (e) { /* fall through to network */ }
+    if (!data) {
+      data = await fetchJSON(`${API}/players/nfl`);
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+        localStorage.setItem(cacheTsKey, String(Date.now()));
+      } catch (e) { /* quota exceeded — skip caching */ }
+    }
+    for (const [id, p] of Object.entries(data)) {
+      if (!p) continue;
+      const name = p.full_name || [p.first_name, p.last_name].filter(Boolean).join(" ") || `Player ${id}`;
+      const fantasyPositions = (p.fantasy_positions && p.fantasy_positions.length) ? p.fantasy_positions : (p.position ? [p.position] : []);
+      db.set(id, { name, pos: p.position || "", fantasyPositions });
+    }
+    return db;
+  }
+
+  function playerLabel(playersDb, id) {
+    const p = playersDb.get(String(id));
+    if (!p) return `Player #${id}`;
+    return p.pos ? `${p.name} (${p.pos})` : p.name;
+  }
+
+  function pickRookieDraft(drafts) {
+    const candidates = (drafts || []).filter((d) => d.type !== "auction");
+    if (!candidates.length) return null;
+    return candidates.reduce((best, d) => {
+      const rounds = (d.settings && d.settings.rounds) || 999;
+      const bestRounds = (best.settings && best.settings.rounds) || 999;
+      return rounds < bestRounds ? d : best;
+    }, candidates[0]);
+  }
+
+  async function loadLeagueShell(leagueId) {
+    const [league, users, rosters] = await Promise.all([
+      fetchJSON(`${API}/league/${leagueId}`),
+      fetchJSON(`${API}/league/${leagueId}/users`),
+      fetchJSON(`${API}/league/${leagueId}/rosters`),
+    ]);
+    const userMap = new Map(users.map((u) => [u.user_id, u]));
+    const rosterMap = new Map();
+    for (const r of rosters) {
+      const u = userMap.get(r.owner_id) || {};
+      const teamName = (u.metadata && u.metadata.team_name) || u.display_name || `Roster ${r.roster_id}`;
+      const s = r.settings || {};
+      rosterMap.set(r.roster_id, {
+        name: teamName,
+        avatar: u.avatar ? `https://sleepercdn.com/avatars/thumbs/${u.avatar}` : null,
+        wins: s.wins || 0,
+        losses: s.losses || 0,
+        pointsFor: (s.fpts || 0) + (s.fpts_decimal || 0) / 100,
+      });
+    }
+    return { league, rosterMap, rosterPositions: league.roster_positions || [] };
+  }
+
+  function seedTeams(teams) {
+    const byRecord = [...teams].sort((a, b) => {
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      if (a.losses !== b.losses) return a.losses - b.losses;
+      return b.pointsFor - a.pointsFor;
+    });
+    const top4 = byRecord.slice(0, 4);
+    const top4Ids = new Set(top4.map((t) => t.rid));
+    const rest = teams.filter((t) => !top4Ids.has(t.rid)).sort((a, b) => b.pointsFor - a.pointsFor);
+    return [...top4, ...rest];
+  }
+
+  async function loadMaxPFByRoster(leagueId, currentWeek, rosterPositions, playersDb) {
+    const weeks = Array.from({ length: currentWeek }, (_, i) => i + 1);
+    const results = await Promise.allSettled(
+      weeks.map((w) => fetchJSON(`${API}/league/${leagueId}/matchups/${w}`).then((data) => ({ week: w, data })))
+    );
+    const maxPFByRoster = new Map();
+    for (const r of results) {
+      if (r.status !== "fulfilled") continue;
+      const { data } = r.value;
+      if (!Array.isArray(data) || !data.length) continue;
+      const totalPoints = data.reduce((s, e) => s + (e.points || 0), 0);
+      if (totalPoints <= 0) continue;
+      for (const e of data) {
+        const maxPts = computeOptimalLineupPoints(e.players || [], e.players_points || {}, rosterPositions, playersDb);
+        maxPFByRoster.set(e.roster_id, (maxPFByRoster.get(e.roster_id) || 0) + maxPts);
+      }
+    }
+    return maxPFByRoster;
+  }
+
+  function computePickOrder(ranked, maxPFByRoster, playoffSpots) {
+    const playoffSeeds = ranked.slice(0, playoffSpots);
+    const lotterySeeds = ranked.slice(playoffSpots);
+    const lotteryOrder = [...lotterySeeds].sort((a, b) => (maxPFByRoster.get(a.rid) || 0) - (maxPFByRoster.get(b.rid) || 0));
+    const playoffOrder = [...playoffSeeds].reverse();
+    return [...lotteryOrder, ...playoffOrder].map((t) => t.rid);
+  }
+
+  async function loadTradedPicks(leagueId, season) {
+    try {
+      const picks = await fetchJSON(`${API}/league/${leagueId}/traded_picks`);
+      return picks.filter((p) => String(p.season) === String(season));
+    } catch (err) {
+      console.error("Traded picks load failed:", err);
+      return [];
+    }
+  }
+
+  async function collectSeasonChain(leagueId) {
+    const chain = [];
+    let id = leagueId;
+    const seen = new Set();
+    while (id && !seen.has(id)) {
+      seen.add(id);
+      const league = await fetchJSON(`${API}/league/${id}`);
+      chain.push(league);
+      id = league.previous_league_id || null;
+    }
+    return chain;
+  }
+
+  async function buildAllSeasonsTradeIndex(leagueId, maxWeek, playersDb) {
+    const chain = await collectSeasonChain(leagueId);
+    const CONCURRENCY = 6;
+    const index = [];
+    const seasonToLeagueId = new Map(chain.map((l) => [String(l.season), l.league_id]));
+    const draftInfoCache = new Map();
+
+    async function getDraftInfo(season) {
+      const lid = seasonToLeagueId.get(String(season));
+      if (!lid) return null;
+      if (draftInfoCache.has(lid)) return draftInfoCache.get(lid);
+      let info = null;
+      try {
+        const seasonDrafts = await fetchJSONWithRetry(`${API}/league/${lid}/drafts`);
+        const draftSummary = pickRookieDraft(seasonDrafts);
+        if (draftSummary) {
+          const [draft, picks] = await Promise.all([
+            fetchJSONWithRetry(`${API}/draft/${draftSummary.draft_id}`),
+            fetchJSONWithRetry(`${API}/draft/${draftSummary.draft_id}/picks`),
+          ]);
+          if (draft && draft.slot_to_roster_id && picks && picks.length) {
+            const picksByNo = new Map(picks.map((p) => [p.pick_no, p]));
+            const slotToRoster = new Map(Object.entries(draft.slot_to_roster_id).map(([slot, rid]) => [Number(rid), Number(slot)]));
+            const teamCount = Object.keys(draft.slot_to_roster_id).length || 10;
+            info = { slotToRoster, picksByNo, teamCount };
+          }
+        }
+      } catch (err) {
+        console.error(`Draft board: draft lookup failed for season ${season}`, err);
+      }
+      draftInfoCache.set(lid, info);
+      return info;
+    }
+
+    async function resolveDraftedPlayer(season, round, originalRid) {
+      const info = await getDraftInfo(season);
+      if (!info) return null;
+      const slot = info.slotToRoster.get(Number(originalRid));
+      if (!slot) return null;
+      const pickNo = (round - 1) * info.teamCount + slot;
+      const pick = info.picksByNo.get(pickNo);
+      if (!pick) return null;
+      if (pick.player_id) return playerLabel(playersDb, pick.player_id);
+      const meta = pick.metadata || {};
+      return [meta.first_name, meta.last_name].filter(Boolean).join(" ") || null;
+    }
+
+    for (const league of chain) {
+      const leagueIdIter = league.league_id;
+      let users, rosters;
+      try {
+        [users, rosters] = await Promise.all([
+          fetchJSONWithRetry(`${API}/league/${leagueIdIter}/users`),
+          fetchJSONWithRetry(`${API}/league/${leagueIdIter}/rosters`),
+        ]);
+      } catch (err) {
+        console.error(`Draft board: users/rosters failed for league ${leagueIdIter}`, err);
+        continue;
+      }
+      const userMap = new Map(users.map((u) => [u.user_id, u]));
+      const rosterName = new Map();
+      for (const r of rosters) {
+        const u = userMap.get(r.owner_id) || {};
+        rosterName.set(r.roster_id, (u.metadata && u.metadata.team_name) || u.display_name || `Roster ${r.roster_id}`);
+      }
+
+      const weeks = Array.from({ length: maxWeek }, (_, i) => i + 1);
+      const weekTx = [];
+      for (let i = 0; i < weeks.length; i += CONCURRENCY) {
+        const slice = weeks.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(
+          slice.map((w) => fetchJSONWithRetry(`${API}/league/${leagueIdIter}/transactions/${w}`).catch(() => []))
+        );
+        weekTx.push(...results.flat());
+      }
+
+      const seen = new Set();
+      for (const tx of weekTx) {
+        if (!tx || tx.type !== "trade" || tx.status !== "complete") continue;
+        if (seen.has(tx.transaction_id)) continue;
+        seen.add(tx.transaction_id);
+        if (!tx.draft_picks || !tx.draft_picks.length) continue;
+
+        const rosterIds = tx.roster_ids || [];
+        const gains = new Map();
+        for (const rid of rosterIds) gains.set(rid, []);
+        for (const [pid, rid] of Object.entries(tx.adds || {})) {
+          if (!gains.has(rid)) gains.set(rid, []);
+          gains.get(rid).push(playerLabel(playersDb, pid));
+        }
+        for (const pick of tx.draft_picks) {
+          const toRoster = pick.owner_id;
+          if (!gains.has(toRoster)) gains.set(toRoster, []);
+          const suffix = pick.round === 1 ? "st" : pick.round === 2 ? "nd" : pick.round === 3 ? "rd" : "th";
+          const fromName = rosterName.get(pick.roster_id) || `Roster ${pick.roster_id}`;
+          const drafted = await resolveDraftedPlayer(pick.season, pick.round, pick.roster_id);
+          const label = drafted
+            ? `${pick.season} ${pick.round}${suffix}-round pick — ${drafted}`
+            : `${pick.season} ${pick.round}${suffix}-round pick (${fromName}'s)`;
+          gains.get(toRoster).push(label);
+        }
+        for (const move of tx.waiver_budget || []) {
+          if (!gains.has(move.receiver)) gains.set(move.receiver, []);
+          gains.get(move.receiver).push(`$${move.amount} FAAB`);
+        }
+        const teams = Array.from(gains.entries()).map(([rid, items]) => ({
+          name: rosterName.get(rid) || `Roster ${rid}`,
+          gained: items.length ? items : ["nothing notable"],
+        }));
+        index.push({ ts: tx.status_updated || tx.created || 0, draftPicks: tx.draft_picks, teams });
+      }
+    }
+    return index;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function draftBoardHTML(board) {
+    if (!board) return '<div class="db-empty">Draft board not available yet.</div>';
+    return `
+      <p class="db-sub">
+        ${board.season} rookie draft order. Click any pick to see how it was acquired.
+      </p>
+      <div class="db-board">
+        ${board.rounds.map((r) => `
+          <div class="db-round">
+            <h3 class="db-round-title">Round ${r.round}</h3>
+            <div class="db-round-picks">
+              ${r.picks.map((p, idx) => `
+                <div class="db-pick-card ${p.traded ? "db-pick-traded" : ""}" data-round="${r.round}" data-idx="${idx}" tabindex="0" role="button">
+                  <span class="db-pick-num">${p.label}</span>
+                  ${p.ownerAvatar ? `<img class="db-pick-avatar" src="${p.ownerAvatar}" alt="">` : ""}
+                  <span class="db-pick-team">${escapeHtml(p.ownerName)}</span>
+                  ${p.traded ? `<span class="db-pick-via">via ${escapeHtml(p.originalName)}</span>` : ""}
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        `).join("")}
+      </div>
+      <div class="db-drawer" id="db-drawer" hidden>
+        <div class="db-drawer-inner" id="db-drawer-inner"></div>
+        <button class="db-drawer-close" id="db-drawer-close">✕ Close</button>
+      </div>
+    `;
+  }
+
+  async function init(userConfig) {
+    const config = Object.assign(
+      { rounds: 4, playoffSpots: 6, totalTeams: 10, maxWeek: 18 },
+      userConfig
+    );
+    if (!config.leagueId) throw new Error("DraftBoard.init: config.leagueId is required");
+    const container = typeof config.container === "string" ? document.querySelector(config.container) : config.container;
+    if (!container) throw new Error("DraftBoard.init: config.container not found");
+
+    const pickOrderFn = config.pickOrderFn || ((ranked, maxPF) => computePickOrder(ranked, maxPF, config.playoffSpots));
+
+    let tradeIndexPromise = null;
+    let drawerToken = 0;
+
+    async function buildBoard() {
+      const [{ league, rosterMap }, playersDb] = await Promise.all([
+        loadLeagueShell(config.leagueId),
+        loadPlayersDb(),
+      ]);
+      const teams = Array.from(rosterMap.entries()).map(([rid, r]) => ({ rid, ...r }));
+      const ranked = seedTeams(teams);
+      if (!ranked.length) return null;
+
+      const currentWeek = (league.settings && league.settings.leg) || 1;
+      const maxPFByRoster = await loadMaxPFByRoster(config.leagueId, currentWeek, league.roster_positions || [], playersDb);
+
+      const order = pickOrderFn(ranked, maxPFByRoster);
+      const nextSeason = String(Number(league.season) + 1);
+      const tradedPicks = await loadTradedPicks(config.leagueId, nextSeason);
+      const tradeMap = new Map();
+      for (const tp of tradedPicks) tradeMap.set(`${tp.round}:${tp.roster_id}`, tp.owner_id);
+
+      const rounds = [];
+      for (let round = 1; round <= config.rounds; round++) {
+        const picks = order.map((originalRid, idx) => {
+          const ownerRid = tradeMap.has(`${round}:${originalRid}`) ? tradeMap.get(`${round}:${originalRid}`) : originalRid;
+          const traded = ownerRid !== originalRid;
+          const owner = rosterMap.get(ownerRid) || rosterMap.get(Number(ownerRid));
+          const original = rosterMap.get(originalRid) || rosterMap.get(Number(originalRid));
+          return {
+            label: `${round}.${String(idx + 1).padStart(2, "0")}`,
+            ownerName: owner ? owner.name : `Roster ${ownerRid}`,
+            ownerAvatar: owner ? owner.avatar : null,
+            traded,
+            originalName: original ? original.name : `Roster ${originalRid}`,
+            originalRid, ownerRid, round, season: nextSeason,
+            acquisition: null,
+          };
+        });
+        rounds.push({ round, picks });
+      }
+
+      return { season: nextSeason, rounds, playersDb };
+    }
+
+    async function findPickAcquisition(pick, playersDb) {
+      if (pick.ownerRid === pick.originalRid) return { type: "original" };
+      if (!tradeIndexPromise) tradeIndexPromise = buildAllSeasonsTradeIndex(config.leagueId, config.maxWeek, playersDb);
+      let index;
+      try {
+        index = await tradeIndexPromise;
+      } catch (err) {
+        console.error("Pick history lookup failed:", err);
+        tradeIndexPromise = null;
+        return { type: "error" };
+      }
+      let match = null;
+      for (const entry of index) {
+        const hit = entry.draftPicks.some(
+          (p) => String(p.season) === String(pick.season) && p.round === pick.round && p.roster_id === pick.originalRid && p.owner_id === pick.ownerRid
+        );
+        if (!hit) continue;
+        if (!match || entry.ts > match.ts) match = entry;
+      }
+      if (!match) return { type: "unknown" };
+      return { type: "trade", date: match.ts, teams: match.teams };
+    }
+
+    async function openDrawer(pick, playersDb) {
+      const inner = container.querySelector("#db-drawer-inner");
+      const drawer = container.querySelector("#db-drawer");
+      if (!inner || !drawer) return;
+      const myToken = ++drawerToken;
+      drawer.hidden = false;
+      inner.innerHTML = `
+        <h3 class="db-drawer-title">Pick ${pick.label}</h3>
+        <p class="db-drawer-sub">Currently owned by ${escapeHtml(pick.ownerName)}</p>
+        ${pick.traded && !pick.acquisition ? '<p class="db-drawer-sub">Looking up trade history across every past season…</p>' : ""}
+      `;
+      let acq = pick.acquisition;
+      if (!acq) {
+        acq = await findPickAcquisition(pick, playersDb);
+        pick.acquisition = acq;
+      }
+      if (myToken !== drawerToken) return;
+      let bodyHtml;
+      if (acq.type === "original") {
+        bodyHtml = `<p class="db-drawer-sub">${escapeHtml(pick.originalName)}'s original pick — never traded.</p>`;
+      } else if (acq.type === "trade") {
+        const dateLabel = acq.date ? new Date(acq.date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "";
+        bodyHtml = `
+          <p class="db-drawer-sub">Acquired in a trade${dateLabel ? ` on ${dateLabel}` : ""}:</p>
+          <div class="db-trade-teams">
+            ${acq.teams.map((team) => `
+              <div class="db-trade-team">
+                <div class="db-trade-team-name">${escapeHtml(team.name)}</div>
+                <div class="db-trade-arrow">received</div>
+                <ul class="db-trade-gains">${team.gained.map((g) => `<li>${escapeHtml(g)}</li>`).join("")}</ul>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      } else if (acq.type === "error") {
+        bodyHtml = `<p class="db-drawer-sub">Couldn't look up this pick's trade history right now — try again in a moment.</p>`;
+      } else {
+        bodyHtml = `<p class="db-drawer-sub">This pick changed hands, but a matching trade couldn't be found in the league's transaction history.</p>`;
+      }
+      inner.innerHTML = `
+        <h3 class="db-drawer-title">Pick ${pick.label}</h3>
+        <p class="db-drawer-sub">Currently owned by ${escapeHtml(pick.ownerName)}</p>
+        ${bodyHtml}
+      `;
+    }
+
+    function wireClicks(board) {
+      container.querySelectorAll(".db-pick-card").forEach((card) => {
+        const round = Number(card.dataset.round);
+        const idx = Number(card.dataset.idx);
+        const roundData = board.rounds[round - 1];
+        const pick = roundData && roundData.picks[idx];
+        if (!pick) return;
+        const open = () => openDrawer(pick, board.playersDb);
+        card.addEventListener("click", open);
+        card.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+      });
+      const closeBtn = container.querySelector("#db-drawer-close");
+      if (closeBtn) closeBtn.addEventListener("click", () => { container.querySelector("#db-drawer").hidden = true; });
+    }
+
+    async function rebuild() {
+      container.innerHTML = '<div class="db-empty">Loading draft board…</div>';
+      let board = null;
+      try {
+        board = await buildBoard();
+      } catch (err) {
+        console.error("DraftBoard: failed to build board", err);
+        container.innerHTML = '<div class="db-empty">Couldn\'t load the draft board right now.</div>';
+        return { board: null };
+      }
+      container.innerHTML = draftBoardHTML(board);
+      if (board) wireClicks(board);
+      return { board };
+    }
+
+    const result = await rebuild();
+    return { board: result.board, rebuild };
+  }
+
+  global.DraftBoard = { init };
+})(typeof window !== "undefined" ? window : this);
 </script>
 </body>
 </html>
