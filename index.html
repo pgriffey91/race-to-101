@@ -1242,7 +1242,14 @@ function renderContent(){
             leagueId: entry.league.league_id,
             container: mount,
             rounds: (entry.league.settings && entry.league.settings.draft_rounds) || 4,
-            maxWeek: LEAGUE_FINAL_WEEK,
+            // NOT the same thing as LEAGUE_FINAL_WEEK (this league's last game week) —
+            // this is how many weeks of TRANSACTION history to scan per season for the
+            // trade-history drawer. Draft-pick trades made in the offseason (after the
+            // season ends but before the new league year starts) get logged under week
+            // numbers well past the regular season's last game, so capping this at 14
+            // silently missed them ("couldn't find matching trade" false negatives).
+            // 18 covers every week Sleeper logs for a season, regular + playoff + offseason.
+            maxWeek: 18,
             myRosterId: myRoster ? myRoster.roster_id : null,
             // Reuse this app's own live tank-race order instead of the widget's
             // built-in default rule, so the board always matches the standings above.
