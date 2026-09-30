@@ -2140,7 +2140,7 @@ setStatus('Enter your Sleeper username above to get started.');
     const seen = new Set();
     while (id && !seen.has(id)) {
       seen.add(id);
-      const league = await fetchJSON(`${API}/league/${id}`);
+      const league = await fetchJSONWithRetry(`${API}/league/${id}`);
       chain.push(league);
       id = league.previous_league_id || null;
     }
@@ -2391,7 +2391,10 @@ setStatus('Enter your Sleeper username above to get started.');
       let acq = pick.acquisition;
       if (!acq) {
         acq = await findPickAcquisition(pick, playersDb);
-        pick.acquisition = acq;
+        // Only cache a definitive answer — an "error" is likely transient (a rate
+        // limit or a blip during the full-history walk), so leave it uncached and
+        // let the next click retry instead of permanently showing the error.
+        if (acq.type !== "error") pick.acquisition = acq;
       }
       if (myToken !== drawerToken) return;
       let bodyHtml;
