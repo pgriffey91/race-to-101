@@ -2382,16 +2382,20 @@ setStatus('Enter your Sleeper username above to get started.');
         tradeIndexPromise = null;
         return { type: "error" };
       }
-      let match = null;
+      // Collect EVERY transaction that touched this exact pick (same season/round/
+      // original-team identity), not just the one that produced its current owner —
+      // a pick can change hands more than once, and the full chain is more useful
+      // than only the last hop.
+      const hops = [];
       for (const entry of index) {
-        const hit = entry.draftPicks.some(
-          (p) => String(p.season) === String(pick.season) && p.round === pick.round && p.roster_id === pick.originalRid && p.owner_id === pick.ownerRid
+        const hit = entry.draftPicks.find(
+          (p) => String(p.season) === String(pick.season) && p.round === pick.round && p.roster_id === pick.originalRid
         );
-        if (!hit) continue;
-        if (!match || entry.ts > match.ts) match = entry;
+        if (hit) hops.push({ ts: entry.ts, teams: entry.teams, ownerId: hit.owner_id, previousOwnerId: hit.previous_owner_id });
       }
-      if (!match) return { type: "unknown" };
-      return { type: "trade", date: match.ts, teams: match.teams };
+      if (!hops.length) return { type: "unknown" };
+      hops.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+      return { type: "trade", hops };
     }
 
     async function openDrawer(pick, playersDb) {
@@ -2418,18 +2422,27 @@ setStatus('Enter your Sleeper username above to get started.');
       if (acq.type === "original") {
         bodyHtml = `<p class="db-drawer-sub">${escapeHtml(pick.originalName)}'s original pick — never traded.</p>`;
       } else if (acq.type === "trade") {
-        const dateLabel = acq.date ? new Date(acq.date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "";
+        const hopLabel = (n) => acq.hops.length > 1 ? `<div class="db-drawer-sub" style="font-weight:700;margin-bottom:6px;">Trade ${n} of ${acq.hops.length}</div>` : "";
         bodyHtml = `
-          <p class="db-drawer-sub">Acquired in a trade${dateLabel ? ` on ${dateLabel}` : ""}:</p>
-          <div class="db-trade-teams">
-            ${acq.teams.map((team) => `
-              <div class="db-trade-team">
-                <div class="db-trade-team-name">${escapeHtml(team.name)}</div>
-                <div class="db-trade-arrow">received</div>
-                <ul class="db-trade-gains">${team.gained.map((g) => `<li>${escapeHtml(g)}</li>`).join("")}</ul>
+          <p class="db-drawer-sub">${acq.hops.length > 1 ? "Full transaction history for this pick, oldest to newest:" : "Acquired in a trade:"}</p>
+          ${acq.hops.map((hop, i) => {
+            const dateLabel = hop.ts ? new Date(hop.ts).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "";
+            return `
+              <div style="margin-bottom:16px;padding-bottom:14px;${i < acq.hops.length - 1 ? "border-bottom:1px solid var(--db-panel-border,#262b38);" : ""}">
+                ${hopLabel(i + 1)}
+                ${dateLabel ? `<div class="db-drawer-sub" style="margin-bottom:6px;">${dateLabel}</div>` : ""}
+                <div class="db-trade-teams">
+                  ${hop.teams.map((team) => `
+                    <div class="db-trade-team">
+                      <div class="db-trade-team-name">${escapeHtml(team.name)}</div>
+                      <div class="db-trade-arrow">received</div>
+                      <ul class="db-trade-gains">${team.gained.map((g) => `<li>${escapeHtml(g)}</li>`).join("")}</ul>
+                    </div>
+                  `).join("")}
+                </div>
               </div>
-            `).join("")}
-          </div>
+            `;
+          }).join("")}
         `;
       } else if (acq.type === "error") {
         bodyHtml = `<p class="db-drawer-sub">Couldn't look up this pick's trade history right now — try again in a moment.</p>`;
