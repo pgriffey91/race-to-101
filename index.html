@@ -2140,7 +2140,17 @@ setStatus('Enter your Sleeper username above to get started.');
     const seen = new Set();
     while (id && !seen.has(id)) {
       seen.add(id);
-      const league = await fetchJSONWithRetry(`${API}/league/${id}`);
+      let league;
+      try {
+        league = await fetchJSONWithRetry(`${API}/league/${id}`);
+      } catch (err) {
+        // A broken/stale previous_league_id (a deleted or unreachable old season)
+        // used to fail the ENTIRE lookup for every pick in this league, forever.
+        // Instead, stop walking further back but keep whatever seasons we did
+        // reach — the drawer can still resolve picks from those.
+        console.error(`Draft board: couldn't load league ${id} while walking season history — stopping there.`, err);
+        break;
+      }
       chain.push(league);
       id = league.previous_league_id || null;
     }
