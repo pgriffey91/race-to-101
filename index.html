@@ -1374,7 +1374,7 @@ function renderStandings(entry){
     let gapChangeHtml = '';
     if(t.gapChange != null && !isMaxPFLeader && Math.abs(t.gapChange) >= 0.05){
       const closing = t.gapChange < 0;
-      gapChangeHtml = `<div class="lbl" style="color:${closing ? 'var(--good)' : 'var(--bad)'};">${closing ? '▼' : '▲'} ${Math.abs(t.gapChange).toFixed(1)} vs last wk</div>`;
+      gapChangeHtml = `<div class="lbl" style="color:${closing ? 'var(--good)' : 'var(--bad)'};">${closing ? '▲ gained' : '▼ lost'} ${Math.abs(t.gapChange).toFixed(1)} on 1st</div>`;
     }
     let rankArrowHtml = '';
     if(t.rankChange != null && t.rankChange !== 0){
@@ -1408,6 +1408,7 @@ function renderStandings(entry){
   }
   const rows = rowHtmls.join('');
 
+  const moveLegend = `<div style="font-size:10.5px;color:var(--muted-2);margin-top:8px;"><span style="color:var(--good);">Green ▲</span> = closer to 1.01 than last week · <span style="color:var(--bad);">Red ▼</span> = further away. The number by each pick is spots moved; the line under "behind 1st" is points gained or lost on the lowest Max PF team this week.</div>`;
   const playoffNote = playoffInfoAvailable
     ? `Picks 1–${nonPlayoffCount} go to the teams outside a playoff spot, ordered by season Max PF (lowest first). Picks ${nonPlayoffCount+1}–${ranked.length} go to the ${ranked.playoffTeams} teams currently holding a playoff spot, ordered by standings (record, points as tiebreak) — worst playoff seed picks first, best record picks last.`
     : `This league's playoff-teams setting wasn't found, so every team is ordered by season Max PF alone.`;
@@ -1427,6 +1428,7 @@ function renderStandings(entry){
     ${rows}
   </div>
   <div style="font-size:10.5px;color:var(--muted-2);margin-top:8px;">${playoffNote}</div>
+  ${moveLegend}
   ${paceBtn}${tradeSimBtn}${draftBoardBtn}
   ${renderPacePanel(entry)}
   ${renderTradeSimPanel(entry)}`;
