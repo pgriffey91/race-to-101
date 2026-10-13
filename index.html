@@ -156,7 +156,7 @@
   }
   .standings-head .sub{font-size:11px;color:var(--muted-2);}
   .stand-row{
-    display:grid;grid-template-columns:26px 1fr auto auto auto auto;gap:12px;align-items:center;
+    display:grid;grid-template-columns:32px 1fr auto auto auto auto;gap:12px;align-items:center;
     padding:10px 14px;border-top:1px solid var(--line);cursor:pointer;
   }
   .stand-row:hover{background:var(--panel-2);}
@@ -171,6 +171,7 @@
   .spoiler-badge{font-size:10.5px;font-weight:600;margin-left:4px;white-space:nowrap;}
   .stand-row:first-of-type{border-top:none;}
   .stand-rank{font-family:'Oswald',sans-serif;color:var(--muted-2);font-size:13px;}
+  .rank-move{font-family:'Inter',sans-serif;font-size:9px;font-weight:600;line-height:1.2;white-space:nowrap;}
   .stand-id{display:flex;flex-direction:column;gap:2px;min-width:0;}
   .stand-name{font-size:13.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;}
   .stand-record{font-size:11px;color:var(--muted-2);font-variant-numeric:tabular-nums;}
@@ -1083,7 +1084,18 @@ function computePlayoffPositions(entry, records, uptoWeek){
   return { available: true, playoffTeams, inPlayoffSet: new Set(orderedRosterIds), orderedRosterIds };
 }
 
-function computeSeasonStandings(entry, uptoWeek){
+function computeSeasonStandings(entry, uptoWeek, skipPrev){
+  // Standings as they stood after the previous week, for the rank-arrow / gap-change
+  // indicators. Computed FIRST so the shared per-roster scratch values (r.__fpts) end up
+  // reflecting the current week once the real pass below runs.
+  let prevByRoster = null;
+  if(!skipPrev && uptoWeek > 1 && entry.weeklyCalcs && entry.weeklyCalcs[uptoWeek - 1]){
+    try{
+      const prev = computeSeasonStandings(entry, uptoWeek - 1, true);
+      prevByRoster = {};
+      prev.forEach(t => { prevByRoster[t.rosterId] = { pickNumber: t.pickNumber, diffFromLeader: t.diffFromLeader }; });
+    }catch(e){ prevByRoster = null; }
+  }
   const totals = {};
   for(let w = 1; w <= uptoWeek; w++){
     const calcs = entry.weeklyCalcs[w] || [];
@@ -1131,6 +1143,14 @@ function computeSeasonStandings(entry, uptoWeek){
 
   const arr = [...nonPlayoff, ...playoff];
   arr.forEach((t, i) => { t.pickNumber = i + 1; });
+  if(prevByRoster){
+    arr.forEach(t => {
+      const pv = prevByRoster[t.rosterId];
+      if(!pv) return;
+      t.rankChange = pv.pickNumber - t.pickNumber;            // + = moved toward 1.01
+      t.gapChange = t.diffFromLeader - pv.diffFromLeader;      // - = closed in on the leader
+    });
+  }
   arr.playoffInfoAvailable = playoffInfo.available;
   arr.playoffTeams = playoffInfo.playoffTeams;
   return arr;
@@ -1351,10 +1371,20 @@ function renderStandings(entry){
       </div>`;
     }
 
-    const lastCol = `<div class="stand-num"><div class="n" style="${isMaxPFLeader ? 'color:var(--good);' : ''}">${isMaxPFLeader ? '—' : '+' + t.diffFromLeader.toFixed(1)}</div><div class="lbl">behind 1st (max pf)</div></div>`;
+    let gapChangeHtml = '';
+    if(t.gapChange != null && !isMaxPFLeader && Math.abs(t.gapChange) >= 0.05){
+      const closing = t.gapChange < 0;
+      gapChangeHtml = `<div class="lbl" style="color:${closing ? 'var(--good)' : 'var(--bad)'};">${closing ? '▼' : '▲'} ${Math.abs(t.gapChange).toFixed(1)} vs last wk</div>`;
+    }
+    let rankArrowHtml = '';
+    if(t.rankChange != null && t.rankChange !== 0){
+      const up = t.rankChange > 0;
+      rankArrowHtml = `<div class="rank-move" style="color:${up ? 'var(--good)' : 'var(--bad)'};" title="${up ? 'Moved up' : 'Dropped'} ${Math.abs(t.rankChange)} spot${Math.abs(t.rankChange) === 1 ? '' : 's'} toward 1.01 since last week">${up ? '▲' : '▼'}${Math.abs(t.rankChange)}</div>`;
+    }
+    const lastCol = `<div class="stand-num"><div class="n" style="${isMaxPFLeader ? 'color:var(--good);' : ''}">${isMaxPFLeader ? '—' : '+' + t.diffFromLeader.toFixed(1)}</div><div class="lbl">behind 1st (max pf)</div>${gapChangeHtml}</div>`;
 
     return `<div class="stand-row" data-roster="${t.rosterId}">
-      <div class="stand-rank" style="${isTopPick ? 'color:var(--gold);' : ''}">${t.pickNumber}</div>
+      <div class="stand-rank" style="${isTopPick ? 'color:var(--gold);' : ''}">${t.pickNumber}${rankArrowHtml}</div>
       <div class="stand-id">
         <div class="stand-name">${t.teamName}${isPlayoff ? ' <span class="playoff-badge">Playoff</span>' : ''}</div>
         <div class="stand-record">${record}</div>
